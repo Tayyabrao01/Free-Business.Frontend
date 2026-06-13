@@ -20,7 +20,9 @@
     "otpFirebaseNotConfigured": "Phone OTP is not set up in Firebase yet. Enable Phone sign-in and allow Pakistan (PK) for SMS. See FIREBASE_OTP_SETUP.md in the project.",
     "otpUsePasswordHint": "You can use Password Login until OTP is configured.",
     "phoneFormatHint": "Use +92 and your number, e.g. +923001234567",
-    "phoneRequired": "Phone number is required"
+    "phoneLocalPlaceholder": "3001234567",
+    "phonePkHint": "+92 is already added. Type your number starting with 3 (10 digits).",
+    "phoneRequired": "Enter your mobile number (10 digits starting with 3)"
   },
   "password": {
     "forgotLink": "Forgot password?",
@@ -185,7 +187,12 @@
     "permissionDenied": "Storage permission is required to save media",
     "noMedia": "No media to download",
     "video": "Video",
-    "tapToView": "Tap to view full screen"
+    "tapToView": "Tap to view full screen",
+    "deletePost": "Delete",
+    "deletePostTitle": "Delete Post",
+    "deletePostConfirm": "Remove this post permanently?",
+    "postDeleted": "Post deleted",
+    "deleteFailed": "Could not delete post"
   },
   "stream": {
     "connecting": "Connecting to chat...",

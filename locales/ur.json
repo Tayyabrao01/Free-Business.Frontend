@@ -20,7 +20,9 @@
     "otpFirebaseNotConfigured": "Firebase میں فون OTP سیٹ نہیں۔ Phone sign-in اور پاکستان (PK) SMS اجازت دیں۔",
     "otpUsePasswordHint": "OTP ٹھیک ہونے تک Password Login استعمال کریں۔",
     "phoneFormatHint": "+92 اور نمبر، مثال +923001234567",
-    "phoneRequired": "فون نمبر ضروری ہے"
+    "phoneLocalPlaceholder": "3001234567",
+    "phonePkHint": "+92 پہلے سے شامل ہے۔ 3 سے شروع ہونے والے 10 ہندسے درج کریں۔",
+    "phoneRequired": "موبائل نمبر درج کریں (3 سے شروع، 10 ہندسے)"
   },
   "password": {
     "forgotLink": "پاس ورڈ بھول گئے؟",
@@ -185,7 +187,12 @@
     "permissionDenied": "میڈیا محفوظ کرنے کے لیے اسٹوریج کی اجازت درکار ہے",
     "noMedia": "ڈاؤن لوڈ کے لیے کوئی میڈیا نہیں",
     "video": "ویڈیو",
-    "tapToView": "مکمل سکرین دیکھنے کے لیے تھپتھپائیں"
+    "tapToView": "مکمل سکرین دیکھنے کے لیے تھپتھپائیں",
+    "deletePost": "حذف",
+    "deletePostTitle": "پوسٹ حذف کریں",
+    "deletePostConfirm": "یہ پوسٹ مستقل حذف کریں؟",
+    "postDeleted": "پوسٹ حذف ہو گئی",
+    "deleteFailed": "پوسٹ حذف نہیں ہو سکی"
   },
   "stream": {
     "connecting": "چیٹ سے منسلک ہو رہا ہے...",

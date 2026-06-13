@@ -131,6 +131,35 @@ const PostsScreen = ({ navigation }) => {
     }
   };
 
+  const isPostAuthor = (post) => {
+    const authorId = post.author?._id || post.author;
+    return authorId && user?._id && String(authorId) === String(user._id);
+  };
+
+  const confirmDeletePost = (post) => {
+    Alert.alert(t('posts.deletePostTitle'), t('posts.deletePostConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('posts.deletePost'),
+        style: 'destructive',
+        onPress: () => handleDeletePost(post._id),
+      },
+    ]);
+  };
+
+  const handleDeletePost = async (postId) => {
+    try {
+      await api.delete(`/posts/${postId}`);
+      setPosts((prev) => prev.filter((p) => p._id !== postId));
+      Alert.alert(t('common.success'), t('posts.postDeleted'));
+    } catch (error) {
+      Alert.alert(
+        t('common.error'),
+        error.response?.data?.message || t('posts.deleteFailed')
+      );
+    }
+  };
+
   const renderPost = ({ item }) => {
     if (!item) {
       return null;
@@ -151,7 +180,14 @@ const PostsScreen = ({ navigation }) => {
 
     return (
       <View style={styles.postCard}>
-        <Text style={styles.postAuthor}>{item.author?.name || t('common.user')}</Text>
+        <View style={styles.postHeader}>
+          <Text style={styles.postAuthor}>{item.author?.name || t('common.user')}</Text>
+          {isPostAuthor(item) ? (
+            <TouchableOpacity onPress={() => confirmDeletePost(item)}>
+              <Text style={styles.deletePostText}>{t('posts.deletePost')}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
         <Text style={styles.postContent}>{item.content || ''}</Text>
 
         {mediaUrl ? (
@@ -320,11 +356,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D4AF37',
   },
+  postHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
   postAuthor: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 5,
     color: '#D4AF37',
+    flex: 1,
+  },
+  deletePostText: {
+    color: '#ff6b6b',
+    fontSize: 13,
+    fontWeight: '600',
   },
   postContent: {
     fontSize: 16,

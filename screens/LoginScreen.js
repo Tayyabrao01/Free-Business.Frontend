@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import LanguageToggle from '../components/LanguageToggle';
 import PasswordInput from '../components/PasswordInput';
+import PakistanPhoneInput from '../components/PakistanPhoneInput';
 import { sendPhoneOtp, confirmPhoneOtp, normalizePhone } from '../services/phoneOtpService';
 
 const LoginScreen = ({ navigation }) => {
@@ -50,7 +51,7 @@ const LoginScreen = ({ navigation }) => {
 
     try {
       setLoading(true);
-      const session = await sendPhoneOtp(normalized);
+      const session = await sendPhoneOtp(phone);
       setConfirmation(session);
       Alert.alert(t('common.success'), t('login.otpSent'));
     } catch (error) {
@@ -65,13 +66,14 @@ const LoginScreen = ({ navigation }) => {
       Alert.alert(t('common.error'), t('login.otpSessionExpired'));
       return;
     }
+    const normalized = normalizePhone(phone);
     try {
       setLoading(true);
       const result = await confirmPhoneOtp(confirmation, otpCode);
       const backendLogin = await loginWithOtp({
         idToken: result.idToken,
-        phone,
-        whatsappNumber: phone,
+        phone: normalized,
+        whatsappNumber: normalized,
       });
       if (!backendLogin.success) {
         Alert.alert(t('common.error'), backendLogin.error);
@@ -142,15 +144,12 @@ const LoginScreen = ({ navigation }) => {
         </>
       ) : (
         <>
-          <TextInput
-            style={styles.input}
-            placeholder={t('login.phoneFormatHint')}
-            placeholderTextColor="#888"
+          <PakistanPhoneInput
             value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
+            onChangeValue={setPhone}
+            placeholder={t('login.phoneLocalPlaceholder')}
           />
-          <Text style={styles.hint}>{t('login.otpUsePasswordHint')}</Text>
+          <Text style={styles.hint}>{t('login.phonePkHint')}</Text>
           <TouchableOpacity style={styles.buttonSecondary} onPress={handleSendOtp} disabled={loading}>
             {loading ? (
               <ActivityIndicator color="#D4AF37" />

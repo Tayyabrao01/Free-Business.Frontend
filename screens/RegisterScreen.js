@@ -13,7 +13,9 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import LanguageToggle from '../components/LanguageToggle';
 import PasswordInput from '../components/PasswordInput';
+import PakistanPhoneInput from '../components/PakistanPhoneInput';
 import { sendPhoneOtp, confirmPhoneOtp, normalizePhone } from '../services/phoneOtpService';
+import { REFERRAL_ENABLED } from '../config/features';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -31,7 +33,10 @@ const RegisterScreen = ({ navigation }) => {
   const { t } = useTranslation();
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !phone.trim() || !whatsappNumber.trim() || !password) {
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedWhatsapp = normalizePhone(whatsappNumber || phone);
+
+    if (!name.trim() || !email.trim() || !normalizedPhone || !normalizedWhatsapp || !password) {
       Alert.alert(t('common.error'), t('register.fillAllFields'));
       return;
     }
@@ -45,8 +50,8 @@ const RegisterScreen = ({ navigation }) => {
     const result = await register(
       name,
       email,
-      phone,
-      whatsappNumber,
+      normalizedPhone,
+      normalizedWhatsapp,
       password,
       location.trim() || 'Not specified',
       referralCode
@@ -59,13 +64,16 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   const handleSendOtp = async () => {
-    if (!name.trim() || !phone.trim() || !whatsappNumber.trim()) {
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedWhatsapp = normalizePhone(whatsappNumber || phone);
+
+    if (!name.trim() || !normalizedPhone || !normalizedWhatsapp) {
       Alert.alert(t('common.error'), t('register.fillAllFieldsOtp'));
       return;
     }
     try {
       setLoading(true);
-      const session = await sendPhoneOtp(normalizePhone(phone));
+      const session = await sendPhoneOtp(phone);
       setConfirmation(session);
       Alert.alert(t('common.success'), t('login.otpSent'));
     } catch (error) {
@@ -80,6 +88,8 @@ const RegisterScreen = ({ navigation }) => {
       Alert.alert(t('common.error'), t('login.otpSessionExpired'));
       return;
     }
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedWhatsapp = normalizePhone(whatsappNumber || phone);
     try {
       setLoading(true);
       const otpResult = await confirmPhoneOtp(confirmation, otpCode);
@@ -87,8 +97,8 @@ const RegisterScreen = ({ navigation }) => {
         idToken: otpResult.idToken,
         name,
         email,
-        phone,
-        whatsappNumber,
+        phone: normalizedPhone,
+        whatsappNumber: normalizedWhatsapp,
         location,
         referralCode,
       });
@@ -148,22 +158,26 @@ const RegisterScreen = ({ navigation }) => {
         autoCapitalize="none"
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder={t('register.phone')}
-        placeholderTextColor="#888"
+      <Text style={styles.fieldLabel}>{t('register.phone')}</Text>
+      <PakistanPhoneInput
         value={phone}
-        onChangeText={setPhone}
-        keyboardType="phone-pad"
+        onChangeValue={(digits) => {
+          setPhone(digits);
+          if (!whatsappNumber || whatsappNumber === phone) {
+            setWhatsappNumber(digits);
+          }
+        }}
+        placeholder={t('login.phoneLocalPlaceholder')}
+        style={styles.phoneField}
       />
+      <Text style={styles.phoneHint}>{t('login.phonePkHint')}</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder={t('register.freeBusinessNumber')}
-        placeholderTextColor="#888"
+      <Text style={styles.fieldLabel}>{t('register.freeBusinessNumber')}</Text>
+      <PakistanPhoneInput
         value={whatsappNumber}
-        onChangeText={setWhatsappNumber}
-        keyboardType="phone-pad"
+        onChangeValue={setWhatsappNumber}
+        placeholder={t('login.phoneLocalPlaceholder')}
+        style={styles.phoneField}
       />
 
       {mode === 'password' ? (
@@ -183,14 +197,16 @@ const RegisterScreen = ({ navigation }) => {
         onChangeText={setLocation}
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder={t('rewards.referralCodeOptional')}
-        placeholderTextColor="#888"
-        value={referralCode}
-        onChangeText={setReferralCode}
-        autoCapitalize="characters"
-      />
+      {REFERRAL_ENABLED ? (
+        <TextInput
+          style={styles.input}
+          placeholder={t('rewards.referralCodeOptional')}
+          placeholderTextColor="#888"
+          value={referralCode}
+          onChangeText={setReferralCode}
+          autoCapitalize="characters"
+        />
+      ) : null}
 
       {mode === 'password' ? (
         <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
@@ -252,6 +268,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
     color: '#D4AF37',
+  },
+  fieldLabel: {
+    color: '#D4AF37',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  phoneField: {
+    marginBottom: 4,
+  },
+  phoneHint: {
+    fontSize: 12,
+    color: '#666666',
+    marginBottom: 12,
   },
   input: {
     borderWidth: 1,

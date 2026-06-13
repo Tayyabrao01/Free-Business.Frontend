@@ -11,6 +11,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from '../hooks/useTranslation';
 import LanguageToggle from '../components/LanguageToggle';
 import { markRewardScreenSeen } from '../services/OnboardingService';
+import { REFERRAL_ENABLED } from '../config/features';
 
 const TIER_CONFIG = [
   {
@@ -144,10 +145,12 @@ const RewardAnnouncementScreen = ({ navigation }) => {
               <Ionicons name="cash-outline" size={18} color="#D4AF37" style={styles.bonusItemIcon} />
               <Text style={styles.bonusText}>{t('rewards.bonusRent')}</Text>
             </View>
-            <View style={styles.bonusItem}>
-              <Ionicons name="share-social-outline" size={18} color="#D4AF37" style={styles.bonusItemIcon} />
-              <Text style={styles.bonusText}>{t('rewards.bonusReferral')}</Text>
-            </View>
+            {REFERRAL_ENABLED ? (
+              <View style={styles.bonusItem}>
+                <Ionicons name="share-social-outline" size={18} color="#D4AF37" style={styles.bonusItemIcon} />
+                <Text style={styles.bonusText}>{t('rewards.bonusReferral')}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 

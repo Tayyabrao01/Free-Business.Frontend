@@ -9,6 +9,25 @@
       "client_info": {
         "mobilesdk_app_id": "1:307000833514:android:428939c14e01c942e4ee93",
         "android_client_info": {
+          "package_name": "com.freebusinessapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD__GpWST4a4pasQMuyYSseKC8EGlT9AeY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:307000833514:android:f8da9f81e597ea84e4ee93",
+        "android_client_info": {
           "package_name": "pk.freebusinessik.app"
         }
       },

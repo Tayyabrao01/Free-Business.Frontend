@@ -39,7 +39,7 @@ export const buildStreamPushConfig = () => {
         sound: 'default',
       },
       incomingCallNotificationTextGetters: {
-        getTitle: (name) => `Incoming call from ${name}`,
+        getTitle: (name) => (name ? `${name} is calling` : 'Incoming call'),
         getBody: () => 'Tap to answer',
         getAcceptButtonTitle: () => 'Answer',
         getDeclineButtonTitle: () => 'Decline',

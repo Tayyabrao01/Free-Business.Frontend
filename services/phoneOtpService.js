@@ -1,4 +1,21 @@
-import auth from '@react-native-firebase/auth';
+import { isValidPkLocalPhone, toE164FromLocal } from '../utils/pakistanPhone';
+
+const getAuth = () => {
+  try {
+    const firebase = require('@react-native-firebase/app').default;
+    if (!firebase.apps?.length) {
+      return null;
+    }
+    return require('@react-native-firebase/auth').default;
+  } catch {
+    return null;
+  }
+};
+
+const firebaseNotReadyError = () =>
+  new Error(
+    'Firebase is not set up on this build. Add google-services.json for pk.freebusinessik.app, rebuild, and reinstall. See FIREBASE_OTP_SETUP.md'
+  );
 
 /**
  * Maps Firebase Auth errors to short, actionable messages for users.
@@ -21,7 +38,7 @@ export const mapFirebaseOtpError = (error) => {
     );
   }
   if (code === 'auth/invalid-phone-number') {
-    return 'Invalid phone number. Use format +923001234567 (country code + number).';
+    return 'Invalid phone number. Enter 10 digits starting with 3, e.g. 3001234567';
   }
   if (code === 'auth/missing-phone-number') {
     return 'Phone number is required.';
@@ -41,30 +58,65 @@ export const mapFirebaseOtpError = (error) => {
   if (code === 'auth/app-not-authorized') {
     return (
       'This app is not authorized for Firebase Phone Auth. Add SHA-1/SHA-256 in Firebase ' +
-      'project settings for com.freebusinessapp. See FIREBASE_OTP_SETUP.md'
+      'project settings for pk.freebusinessik.app. See FIREBASE_OTP_SETUP.md'
     );
   }
 
   return message || 'Failed to send or verify OTP';
 };
 
+/**
+ * Accepts local PK digits (3001234567), +923001234567, or 923001234567.
+ */
 export const normalizePhone = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  const withPlus = raw.startsWith('+') ? raw : `+${raw}`;
-  return withPlus.replace(/(?!^\+)[^\d]/g, '');
+
+  if (raw.startsWith('+')) {
+    return raw.replace(/(?!^\+)[^\d]/g, '');
+  }
+
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+
+  if (digits.startsWith('92') && digits.length >= 12) {
+    return `+${digits.slice(0, 12)}`;
+  }
+  if (digits.startsWith('0') && digits.length === 11) {
+    return `+92${digits.slice(1)}`;
+  }
+
+  return toE164FromLocal(digits);
+};
+
+export const validatePhoneForOtp = (value) => {
+  const e164 = normalizePhone(value);
+  if (!/^\+923\d{9}$/.test(e164)) {
+    return {
+      ok: false,
+      error: 'Enter a valid Pakistani mobile number (10 digits starting with 3)',
+    };
+  }
+  const local = e164.slice(3);
+  if (!isValidPkLocalPhone(local)) {
+    return { ok: false, error: 'Number must start with 3 and be 10 digits long' };
+  }
+  return { ok: true, e164 };
 };
 
 export const sendPhoneOtp = async (phone) => {
-  const normalized = normalizePhone(phone);
-  if (!normalized) {
-    throw new Error('Phone number is required');
+  const auth = getAuth();
+  if (!auth) {
+    throw firebaseNotReadyError();
   }
-  if (!/^\+92\d{10}$/.test(normalized) && !/^\+\d{8,15}$/.test(normalized)) {
-    throw new Error('Use international format, e.g. +923001234567');
+
+  const check = validatePhoneForOtp(phone);
+  if (!check.ok) {
+    throw new Error(check.error);
   }
+
   try {
-    return await auth().signInWithPhoneNumber(normalized);
+    return await auth().signInWithPhoneNumber(check.e164);
   } catch (error) {
     const friendly = mapFirebaseOtpError(error);
     const wrapped = new Error(friendly);
@@ -74,6 +126,11 @@ export const sendPhoneOtp = async (phone) => {
 };
 
 export const confirmPhoneOtp = async (confirmation, code) => {
+  const auth = getAuth();
+  if (!auth) {
+    throw firebaseNotReadyError();
+  }
+
   if (!confirmation) {
     throw new Error('OTP session expired. Please resend code.');
   }

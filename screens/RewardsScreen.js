@@ -16,6 +16,7 @@ import { isAbortError } from '../services/api';
 import ProgressBar from '../components/ProgressBar';
 import { getMyProgress, claimReward, getLeaderboard } from '../services/rewardsApi';
 import { getApiErrorMessage } from '../utils/apiError';
+import { REFERRAL_ENABLED } from '../config/features';
 
 const TIER_COLORS = {
   bronze: '#CD7F32',
@@ -192,12 +193,14 @@ const RewardsScreen = ({ navigation }) => {
         <Text style={styles.linkButtonText}>{t('rewards.viewHistory')}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.linkButton}
-        onPress={() => navigation.navigate('Referral')}
-      >
-        <Text style={styles.linkButtonText}>{t('rewards.referralProgram')}</Text>
-      </TouchableOpacity>
+      {REFERRAL_ENABLED ? (
+        <TouchableOpacity
+          style={styles.linkButton}
+          onPress={() => navigation.navigate('Referral')}
+        >
+          <Text style={styles.linkButtonText}>{t('rewards.referralProgram')}</Text>
+        </TouchableOpacity>
+      ) : null}
       <View style={styles.bottomPad} />
     </>
   );

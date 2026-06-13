@@ -1,3 +1,17 @@
+# Firebase / Google Play Services
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+
+# Notifee
+-keep class app.notifee.** { *; }
+-dontwarn app.notifee.**
+
+# React Native Firebase
+-keep class io.invertase.firebase.** { *; }
+-dontwarn io.invertase.firebase.**
+
 # React Native
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }

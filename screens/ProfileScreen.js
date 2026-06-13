@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
+import { REFERRAL_ENABLED } from '../config/features';
 import Avatar from '../components/Avatar';
 import { getMyProgress } from '../services/rewardsApi';
 import { getUserProfile, updateSocialProfile } from '../services/socialApi';
@@ -188,13 +189,15 @@ const ProfileScreen = ({ navigation }) => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.settingsRow}
-          onPress={() => navigation.navigate('Referral')}
-        >
-          <Text style={styles.infoLabel}>{t('profile.viewReferrals')}</Text>
-          <Text style={styles.infoValue}>→</Text>
-        </TouchableOpacity>
+        {REFERRAL_ENABLED ? (
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => navigation.navigate('Referral')}
+          >
+            <Text style={styles.infoLabel}>{t('profile.viewReferrals')}</Text>
+            <Text style={styles.infoValue}>→</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>{t('profile.totalCommission')}</Text>

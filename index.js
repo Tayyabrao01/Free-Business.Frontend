@@ -5,9 +5,13 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import { AppRegistry } from 'react-native';
-import { registerPushBackgroundHandler } from './services/pushNotifications';
 
-registerPushBackgroundHandler();
+try {
+  const { registerPushBackgroundHandler } = require('./services/pushNotifications');
+  registerPushBackgroundHandler();
+} catch (error) {
+  console.warn('Push background handler skipped:', error?.message);
+}
 
 try {
   const { register } = require('@stream-io/react-native-webrtc');

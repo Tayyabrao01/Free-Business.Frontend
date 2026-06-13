@@ -15,6 +15,7 @@ import api from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
 import { uploadImageAsset } from '../services/uploadImageService';
 import { getApiErrorMessage } from '../utils/apiError';
+import { resolveMediaUrl } from '../utils/imageUrl';
 
 const AddPostScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -97,7 +98,7 @@ const AddPostScreen = ({ navigation }) => {
 
       {imageUrl ? (
         <View style={styles.previewContainer}>
-          <Image source={{ uri: `${BASE_URL.replace('/api', '')}${imageUrl}` }} style={styles.previewImage} />
+          <Image source={{ uri: resolveMediaUrl(imageUrl) }} style={styles.previewImage} />
           <TouchableOpacity style={styles.removeButton} onPress={() => setImageUrl('')}>
             <Text style={styles.removeText}>✕ {t('posts.remove')}</Text>
           </TouchableOpacity>
