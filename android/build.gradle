@@ -1,21 +1,89 @@
 buildscript {
     ext {
-        buildToolsVersion = "36.0.0"
+        buildToolsVersion = "35.0.0"
         minSdkVersion = 24
-        compileSdkVersion = 36
-        targetSdkVersion = 36
-        ndkVersion = "27.1.12297006"
-        kotlinVersion = "2.1.20"
+        // compileSdk 34 = works with AGP 7.4.2; targetSdk 35 = Play Console requirement (2025)
+        compileSdkVersion = 34
+        targetSdkVersion = 35
+        ndkVersion = "23.1.7779620"
+        kotlinVersion = "1.8.0"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle")
+        classpath("com.android.tools.build:gradle:7.4.2")
         classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        classpath("com.google.gms:google-services:4.4.0")
     }
 }
 
-apply plugin: "com.facebook.react.rootproject"
+// Stream Video / NetInfo can pull lifecycle 2.10 (KMP) — incompatible with AGP 7.x + RN 0.72
+def lifecycleVersion = '2.6.2'
+def pinAndroidxLifecycle = { resolutionStrategy ->
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'androidx.lifecycle') {
+            details.useVersion lifecycleVersion
+            details.because 'Pin lifecycle for RN 0.72 / AGP 7.x (avoid KMP 2.10 variant ambiguity)'
+        }
+    }
+    resolutionStrategy.force(
+        "androidx.lifecycle:lifecycle-runtime:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-runtime-ktx:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-viewmodel:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-viewmodel-ktx:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-viewmodel-savedstate:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-livedata-core:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-livedata:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-common:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-common-java8:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-process:${lifecycleVersion}",
+        "androidx.lifecycle:lifecycle-service:${lifecycleVersion}",
+    )
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        mavenLocal()
+        maven { url 'https://www.jitpack.io' }
+    }
+    buildscript {
+        repositories {
+            google()
+            mavenCentral()
+        }
+    }
+    configurations.configureEach { pinAndroidxLifecycle(resolutionStrategy) }
+}
+
+subprojects { subproject ->
+    subproject.afterEvaluate {
+        if (subproject.plugins.hasPlugin('com.android.library') ||
+                subproject.plugins.hasPlugin('com.android.application')) {
+            subproject.android {
+                compileSdkVersion rootProject.ext.compileSdkVersion
+                buildToolsVersion rootProject.ext.buildToolsVersion
+                if (defaultConfig != null && defaultConfig.minSdk != null) {
+                    defaultConfig.minSdk rootProject.ext.minSdkVersion
+                }
+            }
+        }
+        subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions {
+                jvmTarget = '17'
+            }
+        }
+        if (subproject.hasProperty('android')) {
+            subproject.android {
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+            }
+        }
+    }
+}

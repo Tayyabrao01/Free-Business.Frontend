@@ -1,0 +1,11 @@
+Add these to package.json dependencies for call-enabled builds (after installing Android SDK 34):
+
+"@stream-io/react-native-webrtc": "125.4.5",
+"@stream-io/video-react-native-sdk": "1.10.14"
+
+And overrides:
+"@stream-io/video-react-native-sdk": "1.10.14",
+"@stream-io/video-client": "1.4.0",
+"@stream-io/video-react-bindings": "1.4.0"
+
+Then: npm install, set compileSdkVersion = 34 in android/build.gradle, gradlew assembleDebug

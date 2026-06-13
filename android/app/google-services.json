@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "307000833514",
+    "project_id": "free-business-e7b3c",
+    "storage_bucket": "free-business-e7b3c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:307000833514:android:428939c14e01c942e4ee93",
+        "android_client_info": {
+          "package_name": "pk.freebusinessik.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD__GpWST4a4pasQMuyYSseKC8EGlT9AeY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

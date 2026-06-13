@@ -73,3 +73,25 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# Accidental shell redirect files
+/Could
+/Run
+/The
+
+# Build logs and release artifacts
+*.log
+build-log*.txt
+*.aab
+*.apk
+android/app/build/
+android/build/
+android/.gradle/
+
+# Generated bundle (Metro produces this on release builds)
+android/app/src/main/assets/index.android.bundle
