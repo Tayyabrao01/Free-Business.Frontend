@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Free Business</string>
+    <!-- Revopush OTA server. Deployment key is set per buildType in app/build.gradle -->
+    <string moduleConfig="true" name="CodePushServerUrl">https://api.revopush.org</string>
 </resources>

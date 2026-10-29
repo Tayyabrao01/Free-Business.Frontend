@@ -6,15 +6,16 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
+import { CallingState } from '@stream-io/video-client';
 import { useAuth } from '../../context/AuthContext';
 import { useStream } from '../../context/StreamProvider';
 import { useTranslation } from '../../hooks/useTranslation';
+import { endActiveCall, findClientCall } from '../../services/callLifecycle';
 import {
   joinDirectCall,
   joinGroupCall,
-  attachToIncomingCall,
+  prepareIncomingCall,
   ensureVideoClientReady,
-  getVideoClient,
 } from '../../services/streamClientService';
 import { getGroupIdFromCallId } from '../../utils/streamChannel';
 import { ensureCallPermissions } from '../../utils/callPermissions';
@@ -25,11 +26,13 @@ import {
 import StreamActiveCall from '../../components/StreamActiveCall';
 import { stopIncomingRingtone } from '../../utils/incomingRingtone';
 import { addCallLogEntry } from '../../services/callLogService';
+import { formatDisplayError } from '../../utils/apiError';
 
 const StreamCallScreen = ({ route, navigation }) => {
   const {
     otherUserId,
     otherUserName,
+    otherUserAvatar,
     video = true,
     incomingCallCid,
     isGroupCall = false,
@@ -41,11 +44,11 @@ const StreamCallScreen = ({ route, navigation }) => {
   const { reconnect } = useStream();
   const { t } = useTranslation();
   const [call, setCall] = useState(null);
-  const [videoClient, setVideoClient] = useState(null);
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(true);
   const activeCallRef = useRef(null);
   const mountedRef = useRef(true);
+  const hungUpRef = useRef(false);
   const callStartedAtRef = useRef(null);
   const callConnectedRef = useRef(false);
   const peerRef = useRef({
@@ -55,6 +58,10 @@ const StreamCallScreen = ({ route, navigation }) => {
   const isIncoming = Boolean(incomingCallCid);
 
   const callUi = getStreamCallUi();
+  const displayName =
+    peerRef.current.name ||
+    (isGroupCall ? groupName : otherUserName) ||
+    t('common.user');
 
   const persistCallLog = useCallback(
     async (status = 'completed') => {
@@ -92,11 +99,25 @@ const StreamCallScreen = ({ route, navigation }) => {
   );
 
   const handleHangup = useCallback(async () => {
+    hungUpRef.current = true;
+    stopIncomingRingtone();
+    await endActiveCall(activeCallRef.current, {
+      isIncoming,
+      wasConnected: callConnectedRef.current,
+    });
     const status =
       isIncoming && !callConnectedRef.current ? 'missed' : 'completed';
     await persistCallLog(status);
     navigation.goBack();
   }, [isIncoming, navigation, persistCallLog]);
+
+  const handleCallJoined = useCallback(() => {
+    callConnectedRef.current = true;
+    stopIncomingRingtone();
+    if (!callStartedAtRef.current) {
+      callStartedAtRef.current = Date.now();
+    }
+  }, []);
 
   const startCall = useCallback(async () => {
     if (!isStreamVideoAvailable() || !callUi) {
@@ -119,12 +140,10 @@ const StreamCallScreen = ({ route, navigation }) => {
 
     setStarting(true);
     setError(null);
-    setCall(null);
-    setVideoClient(null);
+    callConnectedRef.current = false;
+    hungUpRef.current = false;
 
     try {
-      await reconnect();
-
       const permitted = await ensureCallPermissions(video);
       if (!permitted) {
         setError(t('stream.permissionRequired'));
@@ -138,8 +157,12 @@ const StreamCallScreen = ({ route, navigation }) => {
       }
 
       let activeCall;
+
       if (isIncoming) {
-        activeCall = await attachToIncomingCall(client, incomingCallCid);
+        activeCall = findClientCall(client, incomingCallCid);
+        if (!activeCall) {
+          activeCall = await prepareIncomingCall(client, incomingCallCid);
+        }
       } else if (isGroupCall) {
         activeCall = await joinGroupCall(
           client,
@@ -149,6 +172,7 @@ const StreamCallScreen = ({ route, navigation }) => {
           groupMemberIds,
           video
         );
+        callStartedAtRef.current = Date.now();
       } else {
         activeCall = await joinDirectCall(
           client,
@@ -157,18 +181,15 @@ const StreamCallScreen = ({ route, navigation }) => {
           otherUserName,
           video
         );
+        callStartedAtRef.current = Date.now();
       }
 
-      const readyClient = getVideoClient() || client;
       if (!mountedRef.current) {
-        activeCall.leave().catch(() => {});
+        await endActiveCall(activeCall, { isIncoming, wasConnected: false });
         return;
       }
 
-      stopIncomingRingtone();
       activeCallRef.current = activeCall;
-      callStartedAtRef.current = Date.now();
-      callConnectedRef.current = true;
 
       if (isGroupCall) {
         const custom = activeCall?.state?.custom || activeCall?.state?.session?.custom;
@@ -187,12 +208,11 @@ const StreamCallScreen = ({ route, navigation }) => {
         };
       }
 
-      setVideoClient(readyClient);
       setCall(activeCall);
     } catch (err) {
       console.error('Call start error:', err);
       if (mountedRef.current) {
-        setError(err?.message || t('stream.callFailed'));
+        setError(formatDisplayError(err, t('stream.callFailed')));
       }
     } finally {
       if (mountedRef.current) {
@@ -219,16 +239,26 @@ const StreamCallScreen = ({ route, navigation }) => {
     mountedRef.current = true;
     startCall();
 
+    const connectTimeout = setTimeout(() => {
+      if (mountedRef.current && starting) {
+        setError(t('stream.callFailed'));
+        setStarting(false);
+      }
+    }, 35000);
+
     return () => {
       mountedRef.current = false;
-      stopIncomingRingtone();
-      const activeCall = activeCallRef.current;
-      if (activeCall) {
-        activeCall.leave().catch(() => {});
+      clearTimeout(connectTimeout);
+      if (!hungUpRef.current) {
+        endActiveCall(activeCallRef.current, {
+          isIncoming,
+          wasConnected: callConnectedRef.current,
+        }).catch(() => {});
       }
       activeCallRef.current = null;
     };
-  }, [startCall, isIncoming]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!isStreamVideoAvailable() || !callUi) {
     return (
@@ -256,7 +286,7 @@ const StreamCallScreen = ({ route, navigation }) => {
     );
   }
 
-  if (starting || !call || !videoClient) {
+  if (starting && !call) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#D4AF37" />
@@ -273,12 +303,19 @@ const StreamCallScreen = ({ route, navigation }) => {
     );
   }
 
+  if (!call) {
+    return null;
+  }
+
   return (
     <StreamActiveCall
       call={call}
-      videoClient={videoClient}
       video={video}
+      isGroupCall={isGroupCall}
+      callerName={displayName}
+      callerAvatar={otherUserAvatar}
       onHangup={handleHangup}
+      onCallJoined={handleCallJoined}
     />
   );
 };

@@ -36,8 +36,10 @@ export const rejectGroupMember = (groupId, memberId) =>
 export const createGroupPost = (groupId, data) =>
   api.post(`/social/groups/${groupId}/posts`, data);
 export const getGroupPosts = (groupId) => api.get(`/social/groups/${groupId}/posts`);
-export const syncGroupChat = (groupId) =>
-  api.post(`/social/groups/${groupId}/sync-chat`);
+export const syncGroupChat = (groupId, options = {}) =>
+  api.post(`/social/groups/${groupId}/sync-chat`, {
+    forceRebuild: Boolean(options.forceRebuild),
+  });
 
 export default {
   getUsers,

@@ -2,21 +2,31 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useStream } from '../context/StreamProvider';
 import {
-  createNotificationChannels,
-  isFirebaseConfigured,
+  attachNotificationOpenHandlers,
+  ensureNotificationsReady,
   registerPushForegroundHandler,
-  requestNotificationPermission,
+  registerUserPushDevices,
   subscribeToTokenRefresh,
-} from '../services/pushNotifications';
-import { registerStreamPushDevices } from '../services/streamPushRegistration';
+  isFirebaseConfigured,
+} from '../services/NotificationService';
+import { attachChatMessageNotifications } from '../services/chatNotificationListener';
+import { ensureVideoClientReady } from '../services/streamClientService';
 
 /**
- * After login: notification permission, FCM token → Stream (calls + chat on lock screen).
+ * After login: notification permission, FCM token → Stream (calls + chat on lock screen),
+ * and notification tap → Chat / StreamCall navigation.
  */
 const NotificationSetup = () => {
   const { user } = useAuth();
-  const { chatClient, isReady } = useStream();
+  const { chatClient, isReady, reconnect } = useStream();
   const registeredRef = useRef(false);
+
+  useEffect(() => {
+    const removeOpenHandlers = attachNotificationOpenHandlers();
+    return () => {
+      removeOpenHandlers();
+    };
+  }, []);
 
   useEffect(() => {
     if (!user?._id) {
@@ -29,13 +39,12 @@ const NotificationSetup = () => {
     const setup = async () => {
       if (!isFirebaseConfigured()) {
         console.warn(
-          'Add google-services.json + rebuild for OTP SMS and lock-screen calls/messages. See FIREBASE_OTP_SETUP.md'
+          'Add google-services.json + rebuild for lock-screen calls/messages. See RINGING_CALLS_SETUP.md'
         );
         return;
       }
 
-      await createNotificationChannels();
-      await requestNotificationPermission();
+      await ensureNotificationsReady();
       removeForegroundHandler = registerPushForegroundHandler();
     };
 
@@ -47,6 +56,18 @@ const NotificationSetup = () => {
   }, [user?._id]);
 
   useEffect(() => {
+    if (!user?._id || !isReady || !chatClient) {
+      return undefined;
+    }
+
+    const removeChatListener = attachChatMessageNotifications(chatClient, user._id);
+
+    return () => {
+      removeChatListener();
+    };
+  }, [user?._id, isReady, chatClient]);
+
+  useEffect(() => {
     if (!user?._id || !isReady || !chatClient || registeredRef.current) {
       return undefined;
     }
@@ -54,14 +75,16 @@ const NotificationSetup = () => {
     let removeTokenListener = () => {};
 
     const register = async () => {
-      const result = await registerStreamPushDevices(user._id, chatClient);
+      await ensureVideoClientReady(user, reconnect);
+      const result = await registerUserPushDevices(user._id, chatClient);
       if (result.ok) {
         registeredRef.current = true;
       }
 
       removeTokenListener = subscribeToTokenRefresh(async () => {
         registeredRef.current = false;
-        await registerStreamPushDevices(user._id, chatClient);
+        await ensureVideoClientReady(user, reconnect);
+        await registerUserPushDevices(user._id, chatClient);
         registeredRef.current = true;
       });
     };
@@ -71,7 +94,7 @@ const NotificationSetup = () => {
     return () => {
       removeTokenListener();
     };
-  }, [user?._id, isReady, chatClient]);
+  }, [user?._id, isReady, chatClient, reconnect, user]);
 
   return null;
 };

@@ -17,6 +17,7 @@ import { getFollowers, getFollowing } from '../services/socialApi';
 import { useAuth } from '../context/AuthContext';
 import { useStream } from '../context/StreamProvider';
 import { ensureChatClientReady } from '../services/streamClientService';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const FollowersScreen = ({ route, navigation }) => {
   const { userId, userName, initialTab = 'followers' } = route.params;
@@ -74,7 +75,7 @@ const FollowersScreen = ({ route, navigation }) => {
         otherUserAvatar: item.avatar,
       });
     } catch (error) {
-      Alert.alert(t('common.error'), error.message || t('stream.chatLoadFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('stream.chatLoadFailed')));
     }
   };
 

@@ -32,8 +32,16 @@ export const getDirectMessageChannelId = (userIdA, userIdB) => {
   return `dm-${[a, b].sort().join('-')}`;
 };
 
-export const getDirectCallId = (userIdA, userIdB) =>
-  getDirectMessageChannelId(userIdA, userIdB);
+export const DIRECT_CALL_PREFIX = 'call-dm-';
+
+export const getDirectCallId = (userIdA, userIdB) => {
+  const a = userIdA?.toString();
+  const b = userIdB?.toString();
+  if (!a || !b) {
+    throw new Error('Both user ids are required for a call');
+  }
+  return `${DIRECT_CALL_PREFIX}${[a, b].sort().join('-')}`;
+};
 
 export const GROUP_CHANNEL_PREFIX = 'group-';
 export const GROUP_CALL_PREFIX = 'group-call-';
@@ -83,21 +91,44 @@ export const getChannelMemberIds = (channel) => {
     .map((id) => id.toString());
 };
 
-export const getChannelDisplayName = (channel, currentUserId) => {
-  if (channel?.data?.name) {
-    return channel.data.name;
-  }
-  if (isGroupChannelId(channel?.id)) {
-    return 'Group';
-  }
-  const other = getOtherMemberFromChannel(channel, currentUserId);
-  return other?.name || 'Chat';
-};
-
 export const getOtherMemberFromChannel = (channel, currentUserId) => {
-  if (!channel?.state?.members) {
+  const members = channel?.state?.members;
+  if (!members) {
     return null;
   }
-  const members = Object.values(channel.state.members);
-  return members.find((m) => m.user?.id !== currentUserId?.toString())?.user || null;
+  const myId = currentUserId?.toString();
+  const list = Array.isArray(members) ? members : Object.values(members);
+  const match = list.find((m) => {
+    const memberId = (m.user?.id || m.user_id)?.toString();
+    return memberId && memberId !== myId;
+  });
+  return match?.user || (match?.user_id ? { id: match.user_id, name: match.name } : null);
+};
+
+const isGenericMemberLabel = (name) =>
+  !name || name === 'Member' || name === 'User' || name === 'Chat';
+
+export const getChannelDisplayName = (channel, currentUserId) => {
+  if (isGroupChannelId(channel?.id)) {
+    return (
+      channel?.data?.name ||
+      channel?.state?.channelData?.name ||
+      channel?.data?.group_name ||
+      'Group'
+    );
+  }
+  const other = getOtherMemberFromChannel(channel, currentUserId);
+  const otherName = other?.name;
+  if (!isGenericMemberLabel(otherName)) {
+    return otherName;
+  }
+  return channel?.data?.name || otherName || 'Chat';
+};
+
+export const getChannelDisplayAvatar = (channel, currentUserId) => {
+  if (isGroupChannelId(channel?.id)) {
+    return channel?.data?.image || null;
+  }
+  const other = getOtherMemberFromChannel(channel, currentUserId);
+  return other?.image || null;
 };

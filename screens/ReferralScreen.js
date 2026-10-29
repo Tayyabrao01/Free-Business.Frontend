@@ -13,6 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from '../hooks/useTranslation';
 import { getReferralEarnings, applyReferral } from '../services/rewardsApi';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const ReferralScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -61,7 +62,7 @@ const ReferralScreen = ({ navigation }) => {
       setReferralInput('');
       loadReferrals();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('rewards.referralFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('rewards.referralFailed')));
     } finally {
       setApplying(false);
     }

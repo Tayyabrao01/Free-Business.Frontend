@@ -14,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
-import { REFERRAL_ENABLED } from '../config/features';
+import { REFERRAL_ENABLED, COMMISSION_ENABLED } from '../config/features';
 import Avatar from '../components/Avatar';
 import { getMyProgress } from '../services/rewardsApi';
 import { getUserProfile, updateSocialProfile } from '../services/socialApi';
@@ -92,7 +92,7 @@ const ProfileScreen = ({ navigation }) => {
       setBioModalVisible(false);
       Alert.alert(t('common.success'), t('social.bioUpdated'));
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('common.updateFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('common.updateFailed')));
     } finally {
       setSavingBio(false);
     }
@@ -199,12 +199,14 @@ const ProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         ) : null}
 
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>{t('profile.totalCommission')}</Text>
-          <Text style={styles.infoValue}>
-            PKR {(stats?.totalCommission || 0).toLocaleString()}
-          </Text>
-        </View>
+        {COMMISSION_ENABLED ? (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>{t('profile.totalCommission')}</Text>
+            <Text style={styles.infoValue}>
+              PKR {(stats?.totalCommission || 0).toLocaleString()}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <TouchableOpacity

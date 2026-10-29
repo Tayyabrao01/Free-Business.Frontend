@@ -51,16 +51,27 @@
     "fullName": "Full Name",
     "email": "Email",
     "phone": "Phone number",
+    "phoneOptional": "Phone number (optional)",
     "whatsapp": "Free Business number",
     "freeBusinessNumber": "Free Business number",
+    "freeBusinessNumberOptional": "Free Business number (optional)",
     "passwordHint": "Password (min 6 characters)",
     "location": "City / Location (e.g. Lahore)",
     "registerButton": "Register",
     "hasAccount": "Already have an account? Login",
     "fillAllFields": "Please fill name, email, phone, Free Business number, and password",
+    "fillRequiredFields": "Please fill name, email, and password",
     "fillAllFieldsOtp": "Please fill name, phone, and Free Business number to continue with OTP",
     "passwordMinLength": "Password must be at least 6 characters",
-    "registrationFailed": "Registration Failed"
+    "registrationFailed": "Registration Failed",
+    "emailOtpHint": "We will send a verification code to your email to complete registration.",
+    "sendEmailOtp": "Send verification code to email",
+    "resendEmailOtp": "Resend verification code",
+    "emailOtpSent": "Verification code sent. Check Inbox, Spam, and Promotions. Search your email for \"Free Business\" or the 6-digit code.",
+    "emailOtpCode": "Enter 6-digit code from email",
+    "verifyAndRegister": "Verify & Create Account",
+    "sendOtpFirst": "Please send the verification code to your email first",
+    "enterOtpCode": "Please enter the verification code from your email"
   },
   "home": {
     "welcome": "Welcome, {{name}}!",
@@ -89,7 +100,33 @@
   },
   "plotInformation": {
     "title": "Plot Information",
-    "comingSoon": "Plot information tools will be available here soon."
+    "subtitle": "Compare 5 Marla, 10 Marla and 1 Kanal investment plans",
+    "comingSoon": "Plot information tools will be available here soon.",
+    "monthlyRent": "Monthly rent",
+    "currentPrice": "Current price",
+    "futureValue": "Value after 1 year",
+    "annualRent": "Confirmed yearly rent",
+    "savingsSale": "Plot savings / price gain",
+    "totalProfit": "Total profit",
+    "profitHint": "Rent + appreciation",
+    "disclaimer": "Figures are estimates for guidance. Actual returns may vary. InshaAllah.",
+    "sizes": {
+      "marla5": "5 Marla",
+      "marla10": "10 Marla",
+      "kanal1": "1 Kanal"
+    },
+    "marla5": {
+      "priceLine": "5 Marla plot current price: Rs 34 Lakh 30 Thousand",
+      "futureNote": "After one year, the 5 Marla plot value is estimated at Rs 50 Lakh, InshaAllah."
+    },
+    "marla10": {
+      "priceLine": "10 Marla plot total price: Rs 62 Lakh 90 Thousand",
+      "futureNote": "After one year, the 10 Marla plot value is estimated at Rs 1 Crore, InshaAllah."
+    },
+    "kanal1": {
+      "priceLine": "1 Kanal plot total price: Rs 1 Crore 3 Lakh 20 Thousand",
+      "futureNote": "After one year, the 1 Kanal plot value is estimated at Rs 1.5 Crore, InshaAllah."
+    }
   },
   "profile": {
     "userName": "User Name",
@@ -481,7 +518,7 @@
     "privacyTitle": "Privacy Policy",
     "privacyPolicy": "Privacy Policy",
     "deleteAccount": "Delete account",
-    "lastUpdated": "Last updated: May 2026",
+    "lastUpdated": "Last updated: September 17, 2026",
     "openWebVersion": "Open web version",
     "deleteAccountTitle": "Delete account",
     "deleteAccountConfirm": "This permanently deletes your profile, posts, and messages. This cannot be undone.",
@@ -495,39 +532,39 @@
     "sections": {
       "intro": {
         "title": "Introduction",
-        "body": "Free Business (\"we\", \"our\") operates the Free Business mobile app and related services at apps.freebusinessgip.com. This policy explains what data we collect and how we use it."
+        "body": "This Privacy Policy describes how FreeBusiness, referred to as we, us, or our, collects, uses, and protects information when you use our mobile application, referred to as the App."
       },
       "dataWeCollect": {
-        "title": "Data we collect",
-        "body": "Account information (name, email, phone, location), profile photo, posts, property listings, group membership, messages sent through our chat provider, device/network data for security, and reward program activity."
+        "title": "Information We Collect",
+        "body": "We collect your name, email address, and phone number when you register an account. We collect profile information you choose to add, including profile photos. We collect messages, images, and videos you send through the chat and group chat features of the App. We collect property listing details you submit, including descriptions, prices, and location text that you manually enter. We collect posts and comments you make on the community feed within the App."
       },
       "howWeUse": {
-        "title": "How we use data",
-        "body": "We use your data to provide the app, authenticate you, enable messaging, process rewards, improve security, and respond to support requests."
+        "title": "How We Use Your Information",
+        "body": "We use your email address to send one time passwords, referred to as OTPs, for account verification and login purposes. We use your account information to enable audio and video calling, messaging, and group chat features within the App. We use uploaded images and videos to display them within posts, chats, and property listings. We use your information to operate, maintain, and improve the App, and to communicate with you about your account."
       },
       "sharing": {
-        "title": "Sharing",
-        "body": "We use trusted processors including MongoDB hosting, Stream (chat), and optional Cloudinary (images). We do not sell your personal data."
+        "title": "Third Party Service Providers",
+        "body": "We use Stream to power audio calls, video calls, and chat messaging functionality. We use Brevo to send email based one time passwords for account verification. We use Cloudinary to store and deliver images, photos, and videos uploaded through the App. We use MongoDB Atlas to securely store application data, including account information, messages, and property listings. We use RevoPush to deliver over the air updates to the App. Each of these providers processes data solely to provide their respective service to us, and may have their own privacy practices governing that data."
       },
       "retention": {
-        "title": "Retention",
-        "body": "We keep data while your account is active. When you delete your account, we remove your profile and associated content from our database within a reasonable period."
+        "title": "Data Storage and Security",
+        "body": "Your information is stored on secure servers operated by our third party service providers listed above. We take reasonable measures to protect your information from unauthorized access, alteration, or disclosure."
       },
       "yourRights": {
-        "title": "Your rights",
-        "body": "You can update your profile in the app, request account deletion from Profile settings, and contact us to ask questions about your data."
+        "title": "Data Sharing",
+        "body": "We do not sell your personal information to third parties. We only share information with the service providers listed above as necessary to operate the App."
       },
       "security": {
-        "title": "Security",
-        "body": "We use HTTPS, password hashing, and access controls. No method of transmission over the internet is 100% secure."
+        "title": "Your Choices",
+        "body": "You may update or delete your profile information at any time within the App. You may contact us to request deletion of your account and associated data."
       },
       "children": {
-        "title": "Children",
-        "body": "The app is not directed at children under 13. We do not knowingly collect data from children."
+        "title": "Children's Privacy",
+        "body": "The App is not intended for children under the age of thirteen, and we do not knowingly collect information from children under thirteen."
       },
       "contact": {
-        "title": "Contact",
-        "body": "Email support@freebusinessgip.com for privacy requests or questions about this policy."
+        "title": "Contact Us",
+        "body": "If you have any questions about this Privacy Policy, please contact us through the support section within the App."
       }
     }
   }

@@ -2,31 +2,30 @@ buildscript {
     ext {
         buildToolsVersion = "35.0.0"
         minSdkVersion = 24
-        // compileSdk 34 = works with AGP 7.4.2; targetSdk 35 = Play Console requirement (2025)
-        compileSdkVersion = 34
-        targetSdkVersion = 35
+        compileSdkVersion = 35
+        targetSdkVersion = 36
         ndkVersion = "23.1.7779620"
-        kotlinVersion = "1.8.0"
+        kotlinVersion = "1.9.24"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:7.4.2")
+        classpath("com.android.tools.build:gradle:8.7.3")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
         classpath("com.google.gms:google-services:4.4.0")
     }
 }
 
-// Stream Video / NetInfo can pull lifecycle 2.10 (KMP) — incompatible with AGP 7.x + RN 0.72
+// Stream Video / NetInfo can pull lifecycle 2.10 (KMP) — incompatible with RN 0.72
 def lifecycleVersion = '2.6.2'
 def pinAndroidxLifecycle = { resolutionStrategy ->
     resolutionStrategy.eachDependency { details ->
         if (details.requested.group == 'androidx.lifecycle') {
             details.useVersion lifecycleVersion
-            details.because 'Pin lifecycle for RN 0.72 / AGP 7.x (avoid KMP 2.10 variant ambiguity)'
+            details.because 'Pin lifecycle for RN 0.72 (avoid KMP 2.10 variant ambiguity)'
         }
     }
     resolutionStrategy.force(
@@ -51,12 +50,6 @@ allprojects {
         mavenLocal()
         maven { url 'https://www.jitpack.io' }
     }
-    buildscript {
-        repositories {
-            google()
-            mavenCentral()
-        }
-    }
     configurations.configureEach { pinAndroidxLifecycle(resolutionStrategy) }
 }
 
@@ -70,19 +63,36 @@ subprojects { subproject ->
                 if (defaultConfig != null && defaultConfig.minSdk != null) {
                     defaultConfig.minSdk rootProject.ext.minSdkVersion
                 }
-            }
-        }
-        subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-            kotlinOptions {
-                jvmTarget = '17'
-            }
-        }
-        if (subproject.hasProperty('android')) {
-            subproject.android {
+                buildFeatures {
+                    buildConfig true
+                }
                 compileOptions {
                     sourceCompatibility JavaVersion.VERSION_17
                     targetCompatibility JavaVersion.VERSION_17
                 }
+                if (namespace == null) {
+                    def manifestFile = file("${subproject.projectDir}/src/main/AndroidManifest.xml")
+                    if (manifestFile.exists()) {
+                        def manifestXml = new groovy.xml.XmlParser().parse(manifestFile)
+                        def pkg = manifestXml.attribute('package')
+                        if (pkg) {
+                            namespace pkg
+                        } else {
+                            namespace "com.subproject.${subproject.name.replaceAll(/[^a-zA-Z0-9_]/, '_')}"
+                        }
+                    } else {
+                        namespace "com.subproject.${subproject.name.replaceAll(/[^a-zA-Z0-9_]/, '_')}"
+                    }
+                }
+            }
+        }
+        subproject.tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
+            sourceCompatibility = '17'
+            targetCompatibility = '17'
+        }
+        subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions {
+                jvmTarget = '17'
             }
         }
     }

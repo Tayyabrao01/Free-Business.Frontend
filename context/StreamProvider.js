@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import { useAuth } from './AuthContext';
 import {
   connectStreamClients,
@@ -77,7 +78,8 @@ export const StreamProvider = ({ children }) => {
         setIsReady(Boolean(result.chatClient));
       } catch (err) {
         console.error('Stream connect error:', err);
-        setError(formatDisplayError(err, 'Failed to connect messaging'));
+        const message = formatDisplayError(err, 'Failed to connect messaging');
+        setError(message);
         setIsReady(false);
         setChatClient(null);
         setVideoClient(null);
@@ -107,6 +109,27 @@ export const StreamProvider = ({ children }) => {
 
     return () => clearTimeout(timer);
   }, [user?._id, token, connect]);
+
+  useEffect(() => {
+    if (!user?._id) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        // Don't spam reconnect while Cloudflare is blocking the API
+        if (
+          typeof error === 'string' &&
+          (error.includes('security check') || error.includes('Cloudflare'))
+        ) {
+          return;
+        }
+        connect();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [user?._id, connect, error]);
 
   useEffect(() => {
     return () => {

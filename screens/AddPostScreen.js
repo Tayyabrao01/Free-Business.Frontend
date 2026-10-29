@@ -65,7 +65,7 @@ const AddPostScreen = ({ navigation }) => {
       Alert.alert(t('common.success'), t('posts.createdSuccess'));
       navigation.goBack();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('posts.createFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('posts.createFailed')));
     } finally {
       setLoading(false);
     }

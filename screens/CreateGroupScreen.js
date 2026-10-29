@@ -12,11 +12,16 @@ import {
 import { useTranslation } from '../hooks/useTranslation';
 import { createGroup } from '../services/socialApi';
 import { getApiErrorMessage } from '../utils/apiError';
+import { useAuth } from '../context/AuthContext';
+import { useStream } from '../context/StreamProvider';
+import { navigateToGroupChat } from '../services/groupChatService';
 
 const PRIVACY_OPTIONS = ['public', 'private', 'secret'];
 
 const CreateGroupScreen = ({ navigation }) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const { reconnect } = useStream();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [privacy, setPrivacy] = useState('public');
@@ -35,8 +40,18 @@ const CreateGroupScreen = ({ navigation }) => {
         description: description.trim(),
         privacy,
       });
+      const group = response.data.group;
       Alert.alert(t('common.success'), t('groups.createdSuccess'));
-      navigation.replace('GroupDetail', { groupId: response.data.group._id });
+      await navigateToGroupChat({
+        navigation,
+        user,
+        reconnect,
+        groupId: group._id,
+        groupName: group.name,
+        memberIds: [user._id],
+        isGroupOwner: true,
+        t,
+      });
     } catch (error) {
       Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.createFailed')));
     } finally {

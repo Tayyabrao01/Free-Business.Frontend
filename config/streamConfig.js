@@ -3,7 +3,7 @@
  * in your Stream dashboard (Video → Push notifications).
  * Example: "firebase" or "android-fcm-video"
  */
-export const STREAM_ANDROID_PUSH_PROVIDER = 'firebase';
+export const STREAM_ANDROID_PUSH_PROVIDER = 'freebusiness-fcm';
 
 /** Stream API key (same as server STREAM_API_KEY / app chat key) */
 export const STREAM_API_KEY = '96qttjmc6k5n';

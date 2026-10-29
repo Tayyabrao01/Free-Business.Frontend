@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useLayoutEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Channel,
   MessageList,
@@ -32,7 +33,10 @@ import {
 } from '../../utils/streamChannel';
 import StreamChatRoot from '../../components/StreamChatRoot';
 import { isStreamVideoAvailable } from '../../services/streamVideoOptional';
+import { formatDisplayError } from '../../utils/apiError';
 import { mapStreamChatError } from '../../utils/streamChatErrors';
+import ChatGalleryAttachButton from '../../components/ChatGalleryAttachButton';
+import { setActiveChatChannelId } from '../../services/chatNotificationListener';
 
 const StreamChatScreen = ({ route, navigation }) => {
   const {
@@ -49,7 +53,7 @@ const StreamChatScreen = ({ route, navigation }) => {
   } = route.params || {};
 
   const { user } = useAuth();
-  const { isReady, reconnect } = useStream();
+  const { isReady, reconnect, chatClient } = useStream();
   const { t } = useTranslation();
   const headerHeight = useHeaderHeight();
   const [channel, setChannel] = useState(null);
@@ -60,6 +64,19 @@ const StreamChatScreen = ({ route, navigation }) => {
   const [groupId, setGroupId] = useState(groupIdParam || null);
   const [groupName, setGroupName] = useState(groupNameParam || '');
   const [reloadKey, setReloadKey] = useState(0);
+
+  const channelRef = useRef(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const active = channelRef.current;
+      if (!active?.id || !chatClient?.userID) {
+        return undefined;
+      }
+      active.watch().catch(() => {});
+      return undefined;
+    }, [chatClient?.userID])
+  );
 
   const messagePlaceholder = useMemo(() => {
     if (isGroupChat) {
@@ -168,9 +185,16 @@ const StreamChatScreen = ({ route, navigation }) => {
     const userId = user?._id?.toString();
 
     const run = async () => {
-      setLoading(true);
+      // Keep showing the existing channel while reloading the same id (avoids "cleared" flash).
+      const sameChannel =
+        channelRef.current?.id &&
+        channelId &&
+        channelRef.current.id.toString() === channelId.toString();
+      if (!sameChannel) {
+        setLoading(true);
+        setChannel(null);
+      }
       setLoadError(null);
-      setChannel(null);
 
       try {
         let client = await ensureChatClientReady(user, reconnect);
@@ -213,6 +237,8 @@ const StreamChatScreen = ({ route, navigation }) => {
         }
 
         setChannel(activeChannel);
+        channelRef.current = activeChannel;
+        setActiveChatChannelId(activeChannel.id);
         navigation.setOptions({
           title: channelIsGroup
             ? groupNameParam || activeChannel?.data?.name || t('groups.groupChat')
@@ -223,7 +249,15 @@ const StreamChatScreen = ({ route, navigation }) => {
       } catch (error) {
         console.error('Channel load error:', error);
         if (!cancelled) {
-          setLoadError(mapStreamChatError(error) || t('stream.chatLoadFailed'));
+          setLoadError(
+            formatDisplayError(
+              mapStreamChatError(error) || error,
+              t('stream.chatLoadFailed')
+            )
+          );
+          if (!channelRef.current) {
+            setChannel(null);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -238,6 +272,7 @@ const StreamChatScreen = ({ route, navigation }) => {
 
     return () => {
       cancelled = true;
+      setActiveChatChannelId(null);
     };
   }, [
     user?._id,
@@ -317,6 +352,7 @@ const StreamChatScreen = ({ route, navigation }) => {
               hasFilePicker
               hasCameraPicker
               audioRecordingEnabled
+              AttachButton={ChatGalleryAttachButton}
               additionalTextInputProps={messageInputProps}
             />
           </Channel>

@@ -27,3 +27,6 @@ export const ensureChannelJoin = (channelId, channelType, otherUserId) =>
 /** Single call: server prepares channel + returns channelId to open in the app. */
 export const openChatSession = (payload) =>
   api.post('/stream/chat/open', payload, { timeout: 45000 });
+
+export const rebuildChatSession = (payload) =>
+  openChatSession({ ...payload, forceRebuild: true });

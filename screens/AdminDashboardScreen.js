@@ -20,6 +20,7 @@ import {
   deleteAdminUser,
   deleteAdminPost,
 } from '../services/adminApi';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const TOP_TABS = ['followers', 'posts', 'sales'];
 
@@ -53,7 +54,7 @@ const AdminDashboardScreen = () => {
       console.error('Admin dashboard load error:', error);
       Alert.alert(
         t('common.error'),
-        error.response?.data?.message || t('admin.loadFailed')
+        getApiErrorMessage(error, t('admin.loadFailed'))
       );
     } finally {
       setLoading(false);
@@ -103,7 +104,7 @@ const AdminDashboardScreen = () => {
     } catch (error) {
       Alert.alert(
         t('common.error'),
-        error.response?.data?.message || t('admin.deleteFailed')
+        getApiErrorMessage(error, t('admin.deleteFailed'))
       );
     } finally {
       setActionId(null);
@@ -119,7 +120,7 @@ const AdminDashboardScreen = () => {
     } catch (error) {
       Alert.alert(
         t('common.error'),
-        error.response?.data?.message || t('admin.deleteFailed')
+        getApiErrorMessage(error, t('admin.deleteFailed'))
       );
     } finally {
       setActionId(null);

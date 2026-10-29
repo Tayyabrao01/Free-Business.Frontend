@@ -29,3 +29,9 @@
 # OkHttp / networking
 -dontwarn okhttp3.**
 -dontwarn okio.**
+
+# Revopush / CodePush OTA
+-keep class com.microsoft.codepush.react.** { *; }
+-dontwarn com.microsoft.codepush.react.**
+
+-dontwarn android.app.ApplicationStartInfo

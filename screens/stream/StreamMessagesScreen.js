@@ -19,6 +19,15 @@ import {
 } from '../../utils/streamChannel';
 import StreamChannelPreview from '../../components/StreamChannelPreview';
 import StreamChatRoot from '../../components/StreamChatRoot';
+import { formatDisplayError } from '../../utils/apiError';
+
+const getRootNavigation = (navigation) => {
+  let nav = navigation;
+  while (nav?.getParent?.()) {
+    nav = nav.getParent();
+  }
+  return nav;
+};
 
 const StreamMessagesScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -55,10 +64,7 @@ const StreamMessagesScreen = ({ navigation }) => {
   }
 
   if (!isReady || error) {
-    const errorText =
-      typeof error === 'string'
-        ? error
-        : error?.message || t('stream.connectionFailed');
+    const errorText = formatDisplayError(error, t('stream.connectionFailed'));
 
     return (
       <View style={styles.center}>
@@ -97,7 +103,7 @@ const StreamMessagesScreen = ({ navigation }) => {
             const channelIsGroup = isGroupChannelId(channel.id);
             const other = getOtherMemberFromChannel(channel, user._id);
             if (channelIsGroup) {
-              navigation.navigate('Chat', {
+              getRootNavigation(navigation).navigate('Chat', {
                 channelId: channel.id,
                 channelType: channel.type || 'messaging',
                 isGroupChat: true,
@@ -105,7 +111,7 @@ const StreamMessagesScreen = ({ navigation }) => {
                 groupName: channel.data?.name || t('groups.groupChat'),
               });
             } else {
-              navigation.navigate('Chat', {
+              getRootNavigation(navigation).navigate('Chat', {
                 channelId: channel.id,
                 channelType: channel.type || 'messaging',
                 otherUserId: other?.id,

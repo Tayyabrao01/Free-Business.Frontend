@@ -94,7 +94,7 @@ const AddPropertyScreen = ({ navigation }) => {
       navigation.goBack();
     } catch (error) {
       console.error('Add property error:', error);
-      Alert.alert(t('common.error'), error.response?.data?.message || t('properties.addFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('properties.addFailed')));
     } finally {
       setLoading(false);
     }

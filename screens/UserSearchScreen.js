@@ -16,6 +16,7 @@ import { useStream } from '../context/StreamProvider';
 import { ensureChatClientReady } from '../services/streamClientService';
 import Avatar from '../components/Avatar';
 import { getUsers, followUser, unfollowUser } from '../services/socialApi';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const UserSearchScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -60,7 +61,7 @@ const UserSearchScreen = ({ navigation }) => {
       }
       loadUsers(search.trim());
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('social.actionFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('social.actionFailed')));
     } finally {
       setActionId(null);
     }

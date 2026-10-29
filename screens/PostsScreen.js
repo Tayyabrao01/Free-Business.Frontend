@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,13 @@ import {
   Image,
   FlatList,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import api, { isAbortError } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
+import Avatar from '../components/Avatar';
 import { resolveMediaUrl } from '../utils/imageUrl';
+import { getApiErrorMessage } from '../utils/apiError';
 import { downloadMedia, detectMediaType } from '../services/MediaService';
 import MediaViewerModal from '../components/MediaViewerModal';
 
@@ -28,7 +31,10 @@ const PostsScreen = ({ navigation }) => {
   const [downloadingPostId, setDownloadingPostId] = useState(null);
   const [viewerUri, setViewerUri] = useState(null);
 
-  const fetchPosts = useCallback(async (signal) => {
+  const fetchPosts = useCallback(async (signal, showLoader = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
     try {
       const response = await api.get('/posts', { signal });
       setPosts(response.data || []);
@@ -43,12 +49,13 @@ const PostsScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    fetchPosts(controller.signal);
-    return () => controller.abort();
-  }, [fetchPosts]);
+  useFocusEffect(
+    useCallback(() => {
+      const controller = new AbortController();
+      fetchPosts(controller.signal, posts.length === 0);
+      return () => controller.abort();
+    }, [fetchPosts, posts.length])
+  );
 
   const createPost = async () => {
     if (!newPostText.trim()) {
@@ -155,7 +162,7 @@ const PostsScreen = ({ navigation }) => {
     } catch (error) {
       Alert.alert(
         t('common.error'),
-        error.response?.data?.message || t('posts.deleteFailed')
+        getApiErrorMessage(error, t('posts.deleteFailed'))
       );
     }
   };
@@ -178,10 +185,25 @@ const PostsScreen = ({ navigation }) => {
         ? postDate.toLocaleDateString()
         : '';
 
+    const authorId = item.author?._id || item.author;
+    const authorName = item.author?.name || t('common.user');
+    const authorAvatar = item.author?.avatar || item.author?.profileImage;
+
     return (
       <View style={styles.postCard}>
         <View style={styles.postHeader}>
-          <Text style={styles.postAuthor}>{item.author?.name || t('common.user')}</Text>
+          <TouchableOpacity
+            style={styles.authorRow}
+            onPress={() => {
+              if (authorId) {
+                navigation.navigate('UserProfile', { userId: authorId.toString() });
+              }
+            }}
+            disabled={!authorId}
+          >
+            <Avatar uri={authorAvatar} name={authorName} size={40} />
+            <Text style={styles.postAuthor}>{authorName}</Text>
+          </TouchableOpacity>
           {isPostAuthor(item) ? (
             <TouchableOpacity onPress={() => confirmDeletePost(item)}>
               <Text style={styles.deletePostText}>{t('posts.deletePost')}</Text>
@@ -360,13 +382,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 10,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
   },
   postAuthor: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#D4AF37',
     flex: 1,
+    marginLeft: 10,
   },
   deletePostText: {
     color: '#ff6b6b',

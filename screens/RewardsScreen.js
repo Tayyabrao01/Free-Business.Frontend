@@ -16,7 +16,7 @@ import { isAbortError } from '../services/api';
 import ProgressBar from '../components/ProgressBar';
 import { getMyProgress, claimReward, getLeaderboard } from '../services/rewardsApi';
 import { getApiErrorMessage } from '../utils/apiError';
-import { REFERRAL_ENABLED } from '../config/features';
+import { REFERRAL_ENABLED, COMMISSION_ENABLED } from '../config/features';
 
 const TIER_COLORS = {
   bronze: '#CD7F32',
@@ -76,7 +76,7 @@ const RewardsScreen = ({ navigation }) => {
     } catch (error) {
       Alert.alert(
         t('common.error'),
-        error.response?.data?.message || t('rewards.claimFailed')
+        getApiErrorMessage(error, t('rewards.claimFailed'))
       );
     } finally {
       setClaimingTier(null);
@@ -91,7 +91,8 @@ const RewardsScreen = ({ navigation }) => {
       <View style={styles.leaderInfo}>
         <Text style={styles.leaderName}>{item.name}</Text>
         <Text style={styles.leaderMeta}>
-          {t('rewards.totalSales')}: {item.totalSales} • {formatAmount(item.totalCommission)}
+          {t('rewards.totalSales')}: {item.totalSales}
+          {COMMISSION_ENABLED ? ` • ${formatAmount(item.totalCommission)}` : ''}
         </Text>
       </View>
     </View>
@@ -112,10 +113,12 @@ const RewardsScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{formatAmount(progress?.totalCommission || 0)}</Text>
-          <Text style={styles.statLabel}>{t('rewards.totalCommission')}</Text>
-        </View>
+        {COMMISSION_ENABLED ? (
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatAmount(progress?.totalCommission || 0)}</Text>
+            <Text style={styles.statLabel}>{t('rewards.totalCommission')}</Text>
+          </View>
+        ) : null}
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{progress?.totalSales || 0}</Text>
           <Text style={styles.statLabel}>{t('rewards.totalSales')}</Text>

@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from '../hooks/useTranslation';
 import Avatar from '../components/Avatar';
 import { resolveMediaUrl } from '../utils/imageUrl';
+import { getApiErrorMessage } from '../utils/apiError';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useStream } from '../context/StreamProvider';
@@ -50,7 +51,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
       setGroup(response.data);
     } catch (error) {
       console.error('Group detail error:', error);
-      Alert.alert(t('common.error'), error.response?.data?.message || t('groups.loadFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
       }
       await loadGroup();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('groups.actionFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.actionFailed')));
     } finally {
       setActionLoading(false);
     }
@@ -147,7 +148,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
             Alert.alert(t('common.success'), t('groups.deletedSuccess'));
             navigation.goBack();
           } catch (error) {
-            Alert.alert(t('common.error'), error.response?.data?.message || t('groups.deleteFailed'));
+            Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.deleteFailed')));
           } finally {
             setActionLoading(false);
           }
@@ -167,7 +168,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
             await removeGroupMember(groupId, member._id);
             await loadGroup();
           } catch (error) {
-            Alert.alert(t('common.error'), error.response?.data?.message || t('groups.actionFailed'));
+            Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.actionFailed')));
           }
         },
       },
@@ -180,7 +181,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
       await loadGroup();
       Alert.alert(t('common.success'), t('groups.memberApproved'));
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('groups.actionFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.actionFailed')));
     }
   };
 
@@ -189,7 +190,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
       await rejectGroupMember(groupId, memberId);
       await loadGroup();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('groups.actionFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.actionFailed')));
     }
   };
 
@@ -201,7 +202,7 @@ const GroupDetailScreen = ({ route, navigation }) => {
       setPostText('');
       await loadGroup();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('groups.postFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('groups.postFailed')));
     } finally {
       setPosting(false);
     }

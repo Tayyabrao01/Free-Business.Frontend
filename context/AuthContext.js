@@ -1,8 +1,14 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { getApiErrorMessage } from '../utils/apiError';
 import { disconnectStreamClients } from '../services/streamClientService';
+import { setUnauthorizedHandler } from '../services/authSession';
 import { normalizePhone } from '../services/phoneOtpService';
+import {
+  ensureNotificationsReady,
+  requestNotificationPermission,
+} from '../services/NotificationService';
 
 const AuthContext = createContext();
 
@@ -75,6 +81,8 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(user);
+      ensureNotificationsReady().catch(() => {});
+      requestNotificationPermission().catch(() => {});
       return { success: true };
     } catch (error) {
       if (!error.response) {
@@ -83,13 +91,8 @@ export const AuthProvider = ({ children }) => {
           error: 'No internet connection or server unreachable. Check your network and try again.',
         };
       }
-      const serverMsg = error.response?.data?.message || error.response?.data?.error;
-      const detail = error.response?.data?.error;
-      let message = serverMsg || `Registration failed (${error.response?.status || 'unknown'})`;
-      if (detail && detail !== serverMsg) {
-        message = `${serverMsg}: ${detail}`;
-      }
-      if (error.response?.status === 500 && message.includes('JWT_SECRET')) {
+      let message = getApiErrorMessage(error, 'Registration failed');
+      if (error.response?.status === 500 && String(message).includes('JWT_SECRET')) {
         message = 'Server not configured. Contact support or try again later.';
       }
       return { success: false, error: message };
@@ -111,11 +114,13 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(user);
+      ensureNotificationsReady().catch(() => {});
+      requestNotificationPermission().catch(() => {});
       return { success: true };
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.message || error.response?.data?.error || 'Login failed',
+        error: getApiErrorMessage(error, 'Login failed'),
       };
     }
   };
@@ -144,15 +149,55 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(nextUser);
+      ensureNotificationsReady().catch(() => {});
+      requestNotificationPermission().catch(() => {});
       return { success: true, user: nextUser };
     } catch (error) {
       return {
         success: false,
-        error:
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'OTP login failed',
+        error: getApiErrorMessage(error, 'OTP login failed'),
+      };
+    }
+  };
+
+  const verifyRegisterOtp = async (email, code) => {
+    try {
+      delete api.defaults.headers.Authorization;
+      await AsyncStorage.multiRemove(['token', 'user']);
+      const response = await api.post('/auth/register/verify', { email, code });
+      const { token, user: rawUser } = response.data;
+      const nextUser = normalizeUser(rawUser);
+
+      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('user', JSON.stringify(nextUser));
+
+      api.defaults.headers.Authorization = `Bearer ${token}`;
+      setToken(token);
+      setUser(nextUser);
+      ensureNotificationsReady().catch(() => {});
+      requestNotificationPermission().catch(() => {});
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: getApiErrorMessage(error, 'Registration verification failed'),
+      };
+    }
+  };
+
+  const sendRegisterOtp = async (payload) => {
+    try {
+      await api.post('/otp/send-otp', {
+        email: payload.email,
+        purpose: 'register',
+        payload,
+      });
+      return { success: true };
+    } catch (error) {
+      console.warn('[register] send OTP failed:', error?.response?.status, error?.response?.data);
+      return {
+        success: false,
+        error: getApiErrorMessage(error, 'Could not send verification email. Check your internet and try again.'),
       };
     }
   };
@@ -165,6 +210,13 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
   };
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   const updateStoredUser = async (userData) => {
     const normalized = normalizeUser(userData);
@@ -181,6 +233,8 @@ export const AuthProvider = ({ children }) => {
         register,
         login,
         loginWithOtp,
+        sendRegisterOtp,
+        verifyRegisterOtp,
         logout,
         setUser: updateStoredUser,
       }}

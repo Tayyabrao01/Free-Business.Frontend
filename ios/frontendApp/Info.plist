@@ -8,6 +8,8 @@
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>frontendApp</string>
+	<key>UserAgent</key>
+	<string>Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 FreeBusiness/2.7.5</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

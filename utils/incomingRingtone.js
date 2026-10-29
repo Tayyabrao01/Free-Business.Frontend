@@ -9,7 +9,7 @@ export const startIncomingRingtone = (callId) => {
   stopIncomingRingtone();
   ringingCallId = callId;
   try {
-    InCallManager.startRingtone('_DEFAULT_', [1000, 1000], 'playback', 45);
+    InCallManager.startRingtone('_DEFAULT_', [800, 1200], 'playback', 45);
   } catch (error) {
     console.warn('startIncomingRingtone:', error?.message);
   }

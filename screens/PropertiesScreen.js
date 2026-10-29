@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { FlatList } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import api, { isAbortError } from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
 import { resolveMediaUrl } from '../utils/imageUrl';
@@ -23,31 +24,34 @@ const PropertiesScreen = ({ navigation }) => {
   const [filterType, setFilterType] = useState('all');
   const [viewerUri, setViewerUri] = useState(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadProperties = async () => {
-      try {
+  const loadProperties = useCallback(async (signal, showLoader = true) => {
+    try {
+      if (showLoader) {
         setLoading(true);
-        const response = await api.get('/properties', { signal: controller.signal });
-        if (response?.data) {
-          setProperties(response.data);
-        }
-      } catch (error) {
-        if (!isAbortError(error)) {
-          console.log('Error loading properties:', error);
-          Alert.alert(t('common.error'), t('properties.failedToLoad'));
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
       }
-    };
-
-    loadProperties();
-    return () => controller.abort();
+      const response = await api.get('/properties', { signal });
+      if (response?.data) {
+        setProperties(response.data);
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        console.log('Error loading properties:', error);
+        Alert.alert(t('common.error'), t('properties.failedToLoad'));
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
+    }
   }, [t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const controller = new AbortController();
+      loadProperties(controller.signal, properties.length === 0);
+      return () => controller.abort();
+    }, [loadProperties, properties.length])
+  );
 
   const filteredData = useMemo(() => {
     if (!properties?.length) return [];

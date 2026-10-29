@@ -14,6 +14,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import api from '../services/api';
 import { resolveMediaUrl } from '../utils/imageUrl';
+import { getApiErrorMessage } from '../utils/apiError';
+import { COMMISSION_ENABLED } from '../config/features';
 import MediaViewerModal from '../components/MediaViewerModal';
 
 const PropertyDetailScreen = ({ route, navigation }) => {
@@ -62,17 +64,21 @@ const PropertyDetailScreen = ({ route, navigation }) => {
               });
               const updated = response.data.property || response.data;
               setProperty(updated);
-              const commission = response.data.commission || 0;
-              if (commission > 0) {
-                Alert.alert(
-                  t('rewards.dealCompleted'),
-                  t('rewards.commissionEarned', { amount: commission.toLocaleString() })
-                );
+              if (COMMISSION_ENABLED) {
+                const commission = response.data.commission || 0;
+                if (commission > 0) {
+                  Alert.alert(
+                    t('rewards.dealCompleted'),
+                    t('rewards.commissionEarned', { amount: commission.toLocaleString() })
+                  );
+                }
+              } else {
+                Alert.alert(t('common.success'), t('rewards.dealCompleted'));
               }
             } catch (error) {
               Alert.alert(
                 t('common.error'),
-                error.response?.data?.message || t('common.updateFailed')
+                getApiErrorMessage(error, t('common.updateFailed'))
               );
             } finally {
               setUpdating(false);

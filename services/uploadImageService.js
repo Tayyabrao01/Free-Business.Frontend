@@ -1,10 +1,11 @@
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL } from './api';
+import { APP_USER_AGENT, BASE_URL } from './api';
 import api from './api';
 import { buildImageFormData, prepareImageForUpload } from '../utils/prepareImageUpload';
 import { multipartUploadConfig } from '../utils/multipartUpload';
+import { getApiErrorMessage, sanitizeErrorText } from '../utils/apiError';
 
 const stripFilePrefix = (uri) => uri.replace(/^file:\/\//i, '');
 
@@ -33,12 +34,29 @@ export const uploadImageAsset = async (asset) => {
     const formData = await buildImageFormData(asset, 'image');
     const response = await fetch(`${BASE_URL}/images/upload`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: {
+        ...authHeaders,
+        Accept: 'application/json',
+        'User-Agent': APP_USER_AGENT,
+        'X-FB-Client': 'FreeBusinessMobile',
+      },
       body: formData,
     });
-    const body = await response.json().catch(() => ({}));
+    const rawText = await response.text();
+    let body = {};
+    try {
+      body = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      throw new Error(
+        sanitizeErrorText(rawText, `Upload failed (${response.status})`)
+      );
+    }
     if (!response.ok) {
-      throw new Error(body.message || body.error || `Upload failed (${response.status})`);
+      throw new Error(
+        sanitizeErrorText(
+          body.message || body.error || `Upload failed (${response.status})`
+        )
+      );
     }
     return parseUploadResponse(body);
   } catch (fetchError) {
@@ -51,7 +69,10 @@ export const uploadImageAsset = async (asset) => {
     const response = await api.post('/images/upload', formData, multipartUploadConfig);
     return parseUploadResponse(response.data);
   } catch (axiosError) {
-    console.warn('uploadImageAsset axios multipart failed:', axiosError?.message);
+    console.warn(
+      'uploadImageAsset axios multipart failed:',
+      getApiErrorMessage(axiosError)
+    );
   }
 
   // 3) base64 JSON fallback (works when multipart is blocked)

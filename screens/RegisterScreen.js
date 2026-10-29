@@ -14,7 +14,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import LanguageToggle from '../components/LanguageToggle';
 import PasswordInput from '../components/PasswordInput';
 import PakistanPhoneInput from '../components/PakistanPhoneInput';
-import { sendPhoneOtp, confirmPhoneOtp, normalizePhone } from '../services/phoneOtpService';
+import { normalizePhone } from '../services/phoneOtpService';
 import { REFERRAL_ENABLED } from '../config/features';
 
 const RegisterScreen = ({ navigation }) => {
@@ -24,91 +24,68 @@ const RegisterScreen = ({ navigation }) => {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [password, setPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [confirmation, setConfirmation] = useState(null);
-  const [mode, setMode] = useState('otp');
+  const [otpSent, setOtpSent] = useState(false);
   const [location, setLocation] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register, loginWithOtp } = useAuth();
+  const { sendRegisterOtp, verifyRegisterOtp } = useAuth();
   const { t } = useTranslation();
 
-  const handleRegister = async () => {
-    const normalizedPhone = normalizePhone(phone);
-    const normalizedWhatsapp = normalizePhone(whatsappNumber || phone);
+  const buildPayload = () => ({
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    password,
+    phone: normalizePhone(phone) || '',
+    whatsappNumber: normalizePhone(whatsappNumber || phone) || '',
+    location: location.trim() || 'Not specified',
+    referralCode,
+  });
 
-    if (!name.trim() || !email.trim() || !normalizedPhone || !normalizedWhatsapp || !password) {
-      Alert.alert(t('common.error'), t('register.fillAllFields'));
-      return;
+  const validateForm = () => {
+    if (!name.trim() || !email.trim() || !password) {
+      Alert.alert(t('common.error'), t('register.fillRequiredFields'));
+      return false;
     }
-
     if (password.length < 6) {
       Alert.alert(t('common.error'), t('register.passwordMinLength'));
+      return false;
+    }
+    return true;
+  };
+
+  const handleSendOtp = async () => {
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
-    const result = await register(
-      name,
-      email,
-      normalizedPhone,
-      normalizedWhatsapp,
-      password,
-      location.trim() || 'Not specified',
-      referralCode
-    );
+    const result = await sendRegisterOtp(buildPayload());
+    setLoading(false);
+
+    if (result.success) {
+      setOtpSent(true);
+      Alert.alert(t('common.success'), t('register.emailOtpSent'));
+    } else {
+      Alert.alert(t('common.error'), result.error);
+    }
+  };
+
+  const handleVerifyAndRegister = async () => {
+    if (!otpSent) {
+      Alert.alert(t('common.error'), t('register.sendOtpFirst'));
+      return;
+    }
+    if (!otpCode.trim()) {
+      Alert.alert(t('common.error'), t('register.enterOtpCode'));
+      return;
+    }
+
+    setLoading(true);
+    const result = await verifyRegisterOtp(email.trim().toLowerCase(), otpCode.trim());
     setLoading(false);
 
     if (!result.success) {
       Alert.alert(t('register.registrationFailed'), result.error);
-    }
-  };
-
-  const handleSendOtp = async () => {
-    const normalizedPhone = normalizePhone(phone);
-    const normalizedWhatsapp = normalizePhone(whatsappNumber || phone);
-
-    if (!name.trim() || !normalizedPhone || !normalizedWhatsapp) {
-      Alert.alert(t('common.error'), t('register.fillAllFieldsOtp'));
-      return;
-    }
-    try {
-      setLoading(true);
-      const session = await sendPhoneOtp(phone);
-      setConfirmation(session);
-      Alert.alert(t('common.success'), t('login.otpSent'));
-    } catch (error) {
-      Alert.alert(t('common.error'), error.message || t('login.otpSendFailed'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegisterWithOtp = async () => {
-    if (!confirmation) {
-      Alert.alert(t('common.error'), t('login.otpSessionExpired'));
-      return;
-    }
-    const normalizedPhone = normalizePhone(phone);
-    const normalizedWhatsapp = normalizePhone(whatsappNumber || phone);
-    try {
-      setLoading(true);
-      const otpResult = await confirmPhoneOtp(confirmation, otpCode);
-      const result = await loginWithOtp({
-        idToken: otpResult.idToken,
-        name,
-        email,
-        phone: normalizedPhone,
-        whatsappNumber: normalizedWhatsapp,
-        location,
-        referralCode,
-      });
-      if (!result.success) {
-        Alert.alert(t('register.registrationFailed'), result.error);
-      }
-    } catch (error) {
-      Alert.alert(t('common.error'), error.message || t('login.otpVerifyFailed'));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -121,24 +98,7 @@ const RegisterScreen = ({ navigation }) => {
       <LanguageToggle />
 
       <Text style={styles.title}>{t('register.title')}</Text>
-      <View style={styles.modeRow}>
-        <TouchableOpacity
-          style={[styles.modeBtn, mode === 'otp' && styles.modeBtnActive]}
-          onPress={() => setMode('otp')}
-        >
-          <Text style={[styles.modeText, mode === 'otp' && styles.modeTextActive]}>
-            {t('login.otpMode')}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeBtn, mode === 'password' && styles.modeBtnActive]}
-          onPress={() => setMode('password')}
-        >
-          <Text style={[styles.modeText, mode === 'password' && styles.modeTextActive]}>
-            {t('login.passwordMode')}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.hint}>{t('register.emailOtpHint')}</Text>
 
       <TextInput
         style={styles.input}
@@ -158,36 +118,28 @@ const RegisterScreen = ({ navigation }) => {
         autoCapitalize="none"
       />
 
-      <Text style={styles.fieldLabel}>{t('register.phone')}</Text>
+      <PasswordInput
+        placeholder={t('register.passwordHint')}
+        placeholderTextColor="#888"
+        value={password}
+        onChangeText={setPassword}
+      />
+
+      <Text style={styles.fieldLabel}>{t('register.phoneOptional')}</Text>
       <PakistanPhoneInput
         value={phone}
-        onChangeValue={(digits) => {
-          setPhone(digits);
-          if (!whatsappNumber || whatsappNumber === phone) {
-            setWhatsappNumber(digits);
-          }
-        }}
+        onChangeValue={setPhone}
         placeholder={t('login.phoneLocalPlaceholder')}
         style={styles.phoneField}
       />
-      <Text style={styles.phoneHint}>{t('login.phonePkHint')}</Text>
 
-      <Text style={styles.fieldLabel}>{t('register.freeBusinessNumber')}</Text>
+      <Text style={styles.fieldLabel}>{t('register.freeBusinessNumberOptional')}</Text>
       <PakistanPhoneInput
         value={whatsappNumber}
         onChangeValue={setWhatsappNumber}
         placeholder={t('login.phoneLocalPlaceholder')}
         style={styles.phoneField}
       />
-
-      {mode === 'password' ? (
-        <PasswordInput
-          placeholder={t('register.passwordHint')}
-          placeholderTextColor="#888"
-          value={password}
-          onChangeText={setPassword}
-        />
-      ) : null}
 
       <TextInput
         style={styles.input}
@@ -208,40 +160,35 @@ const RegisterScreen = ({ navigation }) => {
         />
       ) : null}
 
-      {mode === 'password' ? (
-        <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#000000" />
-          ) : (
-            <Text style={styles.buttonText}>{t('register.registerButton')}</Text>
-          )}
-        </TouchableOpacity>
-      ) : (
+      <TouchableOpacity style={styles.buttonSecondary} onPress={handleSendOtp} disabled={loading}>
+        {loading && !otpSent ? (
+          <ActivityIndicator color="#D4AF37" />
+        ) : (
+          <Text style={styles.buttonSecondaryText}>
+            {otpSent ? t('register.resendEmailOtp') : t('register.sendEmailOtp')}
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      {otpSent ? (
         <>
-          <TouchableOpacity style={styles.buttonSecondary} onPress={handleSendOtp} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#D4AF37" />
-            ) : (
-              <Text style={styles.buttonSecondaryText}>{t('login.sendOtp')}</Text>
-            )}
-          </TouchableOpacity>
           <TextInput
             style={styles.input}
-            placeholder={t('login.otpCode')}
+            placeholder={t('register.emailOtpCode')}
             placeholderTextColor="#888"
             value={otpCode}
             onChangeText={setOtpCode}
             keyboardType="number-pad"
           />
-          <TouchableOpacity style={styles.button} onPress={handleRegisterWithOtp} disabled={loading}>
+          <TouchableOpacity style={styles.button} onPress={handleVerifyAndRegister} disabled={loading}>
             {loading ? (
               <ActivityIndicator color="#000000" />
             ) : (
-              <Text style={styles.buttonText}>{t('login.verifyOtp')}</Text>
+              <Text style={styles.buttonText}>{t('register.verifyAndRegister')}</Text>
             )}
           </TouchableOpacity>
         </>
-      )}
+      ) : null}
 
       <TouchableOpacity onPress={() => navigation.navigate('Login')}>
         <Text style={styles.linkText}>{t('register.hasAccount')}</Text>
@@ -266,8 +213,15 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 8,
     color: '#D4AF37',
+  },
+  hint: {
+    fontSize: 14,
+    color: '#888888',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
   },
   fieldLabel: {
     color: '#D4AF37',
@@ -276,11 +230,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   phoneField: {
-    marginBottom: 4,
-  },
-  phoneHint: {
-    fontSize: 12,
-    color: '#666666',
     marginBottom: 12,
   },
   input: {
@@ -293,23 +242,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
     color: '#D4AF37',
   },
-  modeRow: {
-    flexDirection: 'row',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#444',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  modeBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    backgroundColor: '#1a1a1a',
-    alignItems: 'center',
-  },
-  modeBtnActive: { backgroundColor: '#D4AF37' },
-  modeText: { color: '#D4AF37', fontWeight: '600' },
-  modeTextActive: { color: '#000' },
   button: {
     backgroundColor: '#D4AF37',
     padding: 15,

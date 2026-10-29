@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { useStream } from '../context/StreamProvider';
 import { getUserProfile, followUser, unfollowUser } from '../services/socialApi';
 import { ensureChatClientReady } from '../services/streamClientService';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const UserProfileScreen = ({ route, navigation }) => {
   const { userId } = route.params;
@@ -56,7 +57,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       }
       await loadProfile();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('social.actionFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('social.actionFailed')));
     } finally {
       setActionLoading(false);
     }
@@ -86,7 +87,8 @@ const UserProfileScreen = ({ route, navigation }) => {
         </TouchableOpacity>
         <Avatar uri={profile.avatar} name={profile.name} size={90} style={styles.avatar} />
         <Text style={styles.name}>{profile.name}</Text>
-        <Text style={styles.location}>{profile.location}</Text>
+        {profile.email ? <Text style={styles.email}>{profile.email}</Text> : null}
+        <Text style={styles.location}>{profile.location || t('register.location')}</Text>
         {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
       </View>
 
@@ -176,6 +178,7 @@ const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', color: '#000000', fontWeight: '600', marginBottom: 16 },
   avatar: { marginBottom: 12 },
   name: { fontSize: 24, fontWeight: 'bold', color: '#000000' },
+  email: { fontSize: 13, color: '#333333', marginTop: 4 },
   location: { fontSize: 14, color: '#1a1a1a', marginTop: 4 },
   bio: { fontSize: 14, color: '#000000', marginTop: 12, textAlign: 'center', lineHeight: 20 },
   countsRow: { flexDirection: 'row', padding: 20, justifyContent: 'space-around' },

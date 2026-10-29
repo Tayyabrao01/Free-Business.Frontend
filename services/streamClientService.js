@@ -5,16 +5,20 @@ import {
   syncStreamUser,
   openChatSession,
 } from './streamApi';
-import { mapStreamChatError, delay } from '../utils/streamChatErrors';
+import { mapStreamChatError, delay, isMembersFieldError, isChannelNotFoundError } from '../utils/streamChatErrors';
+import { getApiErrorMessage } from '../utils/apiError';
+
+const shouldRebuildChat = (error) => isMembersFieldError(error) || isChannelNotFoundError(error);
 import {
   getDirectMessageChannelId,
+  getDirectCallId,
   getGroupChannelId,
   getGroupCallId,
   getGroupIdFromChannelId,
   isGroupChannelId,
 } from '../utils/streamChannel';
 import { resolveMediaUrl } from '../utils/imageUrl';
-import { boostCallSpeaker } from '../utils/callAudio';
+import { findClientCall } from './callLifecycle';
 
 const CONNECT_TIMEOUT_MS = 12000;
 const WATCH_TIMEOUT_MS = 12000;
@@ -169,8 +173,44 @@ export const connectStreamClients = async (appUser) => {
 
   const differentUser =
     chatClientInstance?.userID && chatClientInstance.userID !== userId;
-  if (differentUser || chatClientInstance) {
+  if (differentUser) {
     await disconnectStreamClients();
+  }
+
+  if (chatClientInstance?.userID === userId) {
+    await waitForChatConnection(chatClientInstance);
+    if (!isVideoClientReady(userId)) {
+      const StreamVideoClient = getStreamVideoClientClass();
+      if (StreamVideoClient && isStreamVideoAvailable()) {
+        try {
+          const streamUser = {
+            id: userId,
+            name: appUser.name || 'User',
+            image: resolveMediaUrl(appUser.avatar || appUser.profileImage) || undefined,
+          };
+          const { data } = await fetchStreamChatToken(userId, appUser.name || 'User');
+          if (data?.token && data?.apiKey) {
+            videoClientInstance = StreamVideoClient.getOrCreateInstance({
+              apiKey: data.apiKey,
+              user: streamUser,
+              token: data.token,
+            });
+            if (!videoClientInstance?.state?.connectedUser?.id) {
+              await videoClientInstance.connectUser(streamUser, data.token);
+            }
+            await waitForVideoConnection(videoClientInstance);
+          }
+        } catch (videoError) {
+          console.warn('Stream video reconnect:', videoError?.message);
+          videoClientInstance = null;
+        }
+      }
+    }
+    return {
+      chatClient: chatClientInstance,
+      videoClient: videoClientInstance,
+      userId,
+    };
   }
 
   const userName = appUser.name || 'User';
@@ -251,8 +291,11 @@ export const ensureVideoClientReady = async (appUser, reconnectFn) => {
 };
 
 export const ensureStreamUserExists = async (userId, userName) => {
+  if (!userId) {
+    return;
+  }
   try {
-    await syncStreamUser(userId, userName);
+    await syncStreamUser(userId, userName || 'User');
   } catch (error) {
     console.warn('Stream user sync failed:', error?.message);
   }
@@ -266,33 +309,13 @@ const withTimeout = (promise, ms, message) =>
     }),
   ]);
 
-const subscribeToChannel = async (chatClient, userId, channelType, channelId) => {
-  const filters = {
-    type: channelType,
-    id: { $eq: channelId },
-    members: { $in: [userId] },
-  };
-
-  try {
-    const queried = await withTimeout(
-      chatClient.queryChannels(filters, [{ last_message_at: -1 }], {
-        limit: 1,
-        watch: true,
-        state: true,
-      }),
-      WATCH_TIMEOUT_MS,
-      'Chat load timed out. Tap Retry.'
-    );
-
-    if (queried?.length) {
-      return queried[0];
-    }
-  } catch (queryError) {
-    console.warn('queryChannels:', queryError?.message);
-  }
-
+const subscribeToChannel = async (chatClient, channelType, channelId) => {
   const channel = chatClient.channel(channelType, channelId);
-  await withTimeout(channel.watch(), WATCH_TIMEOUT_MS, 'Chat load timed out. Tap Retry.');
+  await withTimeout(
+    channel.query({ watch: true, state: true }),
+    WATCH_TIMEOUT_MS,
+    'Chat load timed out. Tap Retry.'
+  );
   return channel;
 };
 
@@ -308,6 +331,7 @@ export const loadChatChannel = async (chatClient, appUser, reconnectFn, params =
     groupId,
     channelId,
     channelType = 'messaging',
+    forceRebuild = false,
   } = params;
 
   let openPayload = { channelType };
@@ -329,18 +353,38 @@ export const loadChatChannel = async (chatClient, appUser, reconnectFn, params =
     throw new Error('Missing chat target');
   }
 
+  const knownChannelId =
+    channelId ||
+    (groupId ? getGroupChannelId(groupId) : null) ||
+    (otherUserId ? getDirectMessageChannelId(userId, otherUserId) : null);
+
+  // Never auto-rebuild group channels — that hard-deletes message history.
+  const allowRebuild = Boolean(forceRebuild) && !groupId && !isGroupChannelId(knownChannelId);
+
+  if (knownChannelId && !allowRebuild) {
+    try {
+      return await subscribeToChannel(chatClient, channelType, knownChannelId);
+    } catch (watchError) {
+      // Fall through to soft open (membership sync) only — still no forceRebuild for groups.
+      if (!shouldRebuildChat(watchError) && !isChannelNotFoundError(watchError)) {
+        throw new Error(mapStreamChatError(watchError));
+      }
+    }
+  }
+
   let openData;
   try {
-    const response = await openChatSession(openPayload);
+    const response = await openChatSession({
+      ...openPayload,
+      forceRebuild: allowRebuild,
+    });
     openData = response.data;
   } catch (error) {
     const status = error?.response?.status;
     if (status === 404) {
-      throw new Error('Chat API missing. Deploy backend v2.4.2 and restart server.');
+      throw new Error('Chat API missing. Deploy backend v2.7.0 and restart server.');
     }
-    throw new Error(
-      error?.response?.data?.message || error?.message || 'Could not prepare chat'
-    );
+    throw new Error(getApiErrorMessage(error, 'Could not prepare chat'));
   }
 
   const resolvedType = openData?.channelType || channelType;
@@ -349,11 +393,19 @@ export const loadChatChannel = async (chatClient, appUser, reconnectFn, params =
     throw new Error('Server did not return a chat channel id');
   }
 
-  await delay(400);
+  await delay(100);
 
   try {
-    return await subscribeToChannel(chatClient, userId, resolvedType, resolvedId);
+    return await subscribeToChannel(chatClient, resolvedType, resolvedId);
   } catch (error) {
+    if (shouldRebuildChat(error)) {
+      await delay(800);
+      try {
+        return await subscribeToChannel(chatClient, resolvedType, resolvedId);
+      } catch (retryError) {
+        throw new Error(mapStreamChatError(retryError));
+      }
+    }
     throw new Error(mapStreamChatError(error));
   }
 };
@@ -388,6 +440,12 @@ export const openDirectMessageChannel = async (
 export const openGroupChannel = async (chatClient, groupId) =>
   loadChatChannel(chatClient, { _id: chatClient.userID }, null, { groupId });
 
+const buildVideoCallMembers = (userIds, adminUserId) =>
+  userIds.map((user_id) => ({
+    user_id: user_id.toString(),
+    role: user_id.toString() === adminUserId?.toString() ? 'admin' : 'user',
+  }));
+
 export const joinGroupCall = async (
   videoClient,
   currentUserId,
@@ -411,18 +469,14 @@ export const joinGroupCall = async (
   await Promise.all(
     uniqueMembers
       .filter((id) => id !== currentUserId.toString())
-      .map((id) => ensureStreamUserExists(id, 'Member'))
+      .map((id) => ensureStreamUserExists(id))
   );
 
   const callId = getGroupCallId(groupId);
   const call = videoClient.call('default', callId);
+  const streamMembers = buildVideoCallMembers(uniqueMembers, currentUserId);
 
-  const streamMembers = uniqueMembers.map((user_id, index) => ({
-    user_id,
-    role: index === 0 ? 'admin' : 'user',
-  }));
-
-  await call.getOrCreate({
+  const createPayload = {
     ring: true,
     video: videoEnabled,
     data: {
@@ -430,21 +484,38 @@ export const joinGroupCall = async (
         groupId: groupId.toString(),
         groupName: groupName || 'Group',
         isGroupCall: true,
+        videoEnabled: Boolean(videoEnabled),
       },
       members: streamMembers,
     },
-  });
+  };
 
   try {
-    await call.ring();
-  } catch (ringError) {
-    console.warn('group call.ring:', ringError?.message);
+    await withTimeout(call.create(createPayload), 20000, 'Group call setup timed out');
+  } catch (createError) {
+    const exists = String(createError?.message || '')
+      .toLowerCase()
+      .includes('already exists');
+    if (!exists) {
+      await withTimeout(
+        call.getOrCreate(createPayload),
+        20000,
+        'Group call setup timed out'
+      );
+    } else {
+      await withTimeout(call.get(), 15000, 'Could not load group call');
+    }
+    try {
+      await withTimeout(call.ring(), 10000, 'Could not ring group members');
+    } catch (ringError) {
+      console.warn('group call.ring:', ringError?.message);
+    }
   }
 
   let lastJoinError;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await call.join();
+      await withTimeout(call.join({ create: true }), 20000, 'Could not join group call');
       lastJoinError = null;
       break;
     } catch (joinError) {
@@ -466,14 +537,19 @@ export const joinGroupCall = async (
     }
   }
 
-  await boostCallSpeaker(call, videoEnabled);
-
+  // Audio routing is applied once the active call UI mounts (avoids echo).
   return call;
 };
 
-export const attachToIncomingCall = async (videoClient, callCid) => {
+/** Load incoming call without joining — Accept button calls join(). */
+export const prepareIncomingCall = async (videoClient, callCid) => {
   if (!videoClient || !callCid) {
     throw new Error('Missing call information');
+  }
+
+  const existing = findClientCall(videoClient, callCid);
+  if (existing) {
+    return existing;
   }
 
   const separator = callCid.indexOf(':');
@@ -481,14 +557,11 @@ export const attachToIncomingCall = async (videoClient, callCid) => {
   const id = separator >= 0 ? callCid.slice(separator + 1) : callCid;
 
   const call = videoClient.call(type, id);
-  try {
-    await call.get({ ring: false });
-  } catch (getError) {
-    console.warn('incoming call get:', getError?.message);
-  }
-
+  await withTimeout(call.get(), 20000, 'Could not load incoming call');
   return call;
 };
+
+export const attachToIncomingCall = prepareIncomingCall;
 
 export const joinDirectCall = async (
   videoClient,
@@ -503,30 +576,50 @@ export const joinDirectCall = async (
 
   await ensureStreamUserExists(otherUserId, otherUserName);
 
-  const callId = getDirectMessageChannelId(currentUserId, otherUserId);
+  const callId = getDirectCallId(currentUserId, otherUserId);
   const call = videoClient.call('default', callId);
+  const streamMembers = buildVideoCallMembers(
+    [currentUserId.toString(), otherUserId.toString()],
+    currentUserId
+  );
 
-  await call.getOrCreate({
+  const createPayload = {
     ring: true,
     video: videoEnabled,
     data: {
-      members: [
-        { user_id: currentUserId.toString(), role: 'admin' },
-        { user_id: otherUserId.toString(), role: 'user' },
-      ],
+      custom: {
+        videoEnabled: Boolean(videoEnabled),
+      },
+      members: streamMembers,
     },
-  });
+  };
 
   try {
-    await call.ring();
-  } catch (ringError) {
-    console.warn('call.ring:', ringError?.message);
+    await withTimeout(call.create(createPayload), 20000, 'Call setup timed out');
+  } catch (createError) {
+    const exists = String(createError?.message || '')
+      .toLowerCase()
+      .includes('already exists');
+    if (!exists) {
+      await withTimeout(
+        call.getOrCreate(createPayload),
+        20000,
+        'Call setup timed out'
+      );
+    } else {
+      await withTimeout(call.get(), 15000, 'Could not load call');
+    }
+    try {
+      await withTimeout(call.ring(), 10000, 'Could not ring callee');
+    } catch (ringError) {
+      console.warn('call.ring:', ringError?.message);
+    }
   }
 
   let lastJoinError;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await call.join();
+      await withTimeout(call.join({ create: true }), 20000, 'Could not join call');
       lastJoinError = null;
       break;
     } catch (joinError) {
@@ -548,7 +641,6 @@ export const joinDirectCall = async (
     }
   }
 
-  await boostCallSpeaker(call, videoEnabled);
-
+  // Audio routing is applied once the active call UI mounts (avoids echo).
   return call;
 };

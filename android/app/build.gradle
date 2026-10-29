@@ -1,4 +1,5 @@
 apply plugin: "com.android.application"
+
 apply plugin: "com.facebook.react"
 apply plugin: "org.jetbrains.kotlin.android"
 
@@ -14,6 +15,10 @@ android {
 
     namespace = "pk.freebusinessik.app"
 
+    buildFeatures {
+        buildConfig true
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -23,8 +28,8 @@ android {
         applicationId "pk.freebusinessik.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "1.6.4"
+        versionCode 30
+        versionName "1.7.3"
     }
 
     signingConfigs {
@@ -47,12 +52,16 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Revopush Staging — safe for internal/dev Release-like tests
+            resValue "string", "CodePushDeploymentKey", "Of6KOCSdCIcqvc5U83NA5a1KZu3BVy6RKZ8QNx"
         }
         release {
             signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Revopush Production — Play Store / production APKs
+            resValue "string", "CodePushDeploymentKey", "DkGQISjhDL-VTNpLubx1rFvGYnMDVy6RKZ8QNx"
         }
     }
 
@@ -78,7 +87,7 @@ gradle.taskGraph.whenReady { taskGraph ->
     if (taskGraph.allTasks.any { it.name.contains('Release') && (it.name.contains('Bundle') || it.name.contains('Assemble')) }) {
         def releaseConfig = android.signingConfigs.release
         if (releaseConfig.storeFile == null || !releaseConfig.storeFile.exists()) {
-            throw new GradleException(
+            throw new RuntimeException(
                 'Release keystore missing. Set MYAPP_UPLOAD_* in android/gradle.properties and place my-upload-key.keystore in android/app/.'
             )
         }
@@ -93,6 +102,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime:2.6.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.6.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2")
+    implementation project(':react-native-code-push')
 
     constraints {
         implementation("androidx.lifecycle:lifecycle-runtime") { version { strictly '2.6.2' } }
@@ -108,3 +118,6 @@ apply from: file("../../node_modules/@react-native-community/cli-platform-androi
 if (file("google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }
+
+// CodePush OTA (Microsoft client → Revopush server). RN 0.72 cannot use @revopush SDK 2.x.
+apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"

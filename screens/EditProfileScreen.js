@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useTranslation } from '../hooks/useTranslation';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, setUser } = useAuth();
@@ -31,7 +32,7 @@ const EditProfileScreen = ({ navigation }) => {
       Alert.alert(t('common.success'), t('editProfile.updatedSuccess'));
       navigation.goBack();
     } catch (error) {
-      Alert.alert(t('common.error'), error.response?.data?.message || t('common.updateFailed'));
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('common.updateFailed')));
     } finally {
       setLoading(false);
     }
