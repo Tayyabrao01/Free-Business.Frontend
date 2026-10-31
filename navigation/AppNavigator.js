@@ -13,7 +13,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
-import { checkIfRewardScreenSeen } from '../services/OnboardingService';
+import { checkIfHasRegistered } from '../services/OnboardingService';
 
 // Main tab screens
 import HomeScreen from '../screens/HomeScreen';
@@ -123,7 +123,7 @@ function MainTabs() {
 export default function AppNavigator() {
   const { user, loading } = useAuth();
   const [onboardingReady, setOnboardingReady] = useState(false);
-  const [rewardScreenSeen, setRewardScreenSeen] = useState(true);
+  const [hasRegistered, setHasRegistered] = useState(true);
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -137,9 +137,9 @@ export default function AppNavigator() {
         return;
       }
 
-      const seen = await checkIfRewardScreenSeen();
+      const registered = await checkIfHasRegistered();
       if (isMounted) {
-        setRewardScreenSeen(seen);
+        setHasRegistered(registered);
         setOnboardingReady(true);
       }
     };
@@ -157,7 +157,7 @@ export default function AppNavigator() {
     return null;
   }
 
-  const authInitialRoute = rewardScreenSeen ? 'Login' : 'RewardAnnouncement';
+  const authInitialRoute = hasRegistered ? 'Login' : 'Register';
 
   return (
     <Stack.Navigator
@@ -165,21 +165,37 @@ export default function AppNavigator() {
       initialRouteName={!user ? authInitialRoute : 'MainTabs'}
     >
       {!user ? (
-        <>
-          <Stack.Screen name="RewardAnnouncement" component={RewardAnnouncementScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-          <Stack.Screen
-            name="ForgotPassword"
-            component={ForgotPasswordScreen}
-            options={{ ...headerScreenOptions, title: 'Forgot password' }}
-          />
-          <Stack.Screen
-            name="ResetPassword"
-            component={ResetPasswordScreen}
-            options={{ ...headerScreenOptions, title: 'Reset password' }}
-          />
-        </>
+        hasRegistered ? (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen
+              name="ForgotPassword"
+              component={ForgotPasswordScreen}
+              options={{ ...headerScreenOptions, title: 'Forgot password' }}
+            />
+            <Stack.Screen
+              name="ResetPassword"
+              component={ResetPasswordScreen}
+              options={{ ...headerScreenOptions, title: 'Reset password' }}
+            />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen
+              name="ForgotPassword"
+              component={ForgotPasswordScreen}
+              options={{ ...headerScreenOptions, title: 'Forgot password' }}
+            />
+            <Stack.Screen
+              name="ResetPassword"
+              component={ResetPasswordScreen}
+              options={{ ...headerScreenOptions, title: 'Reset password' }}
+            />
+          </>
+        )
       ) : (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
@@ -192,7 +208,7 @@ export default function AppNavigator() {
           <Stack.Screen
             name="Properties"
             component={PropertiesScreen}
-            options={{ ...headerScreenOptions, title: t('tabs.properties') }}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="Rewards"
@@ -230,10 +246,7 @@ export default function AppNavigator() {
           <Stack.Screen
             name="Chat"
             component={StreamChatScreen}
-            options={({ route }) => ({
-              ...headerScreenOptions,
-              title: route.params?.otherUserName || t('chat.chatTitle'),
-            })}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="StreamCall"

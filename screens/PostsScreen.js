@@ -9,8 +9,12 @@ import {
   Alert,
   Image,
   FlatList,
+  RefreshControl,
+  StatusBar,
+  Share,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import api, { isAbortError } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
@@ -20,14 +24,103 @@ import { getApiErrorMessage } from '../utils/apiError';
 import { downloadMedia, detectMediaType } from '../services/MediaService';
 import MediaViewerModal from '../components/MediaViewerModal';
 
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  return date.toLocaleDateString();
+};
+
+const ExpandableText = ({ text, maxLength = 160 }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!text) return null;
+
+  const isLong = text.length > maxLength || text.split('\n').length > 3;
+
+  const renderFormattedTokens = (rawText) => {
+    const tokens = rawText.split(/(\s+)/);
+    return tokens.map((token, idx) => {
+      if (token.startsWith('#') && token.length > 1) {
+        return (
+          <Text key={idx} style={styles.hashtagText}>
+            {token}
+          </Text>
+        );
+      }
+      return token;
+    });
+  };
+
+  if (!isLong) {
+    return (
+      <View style={styles.contentWrap}>
+        <Text style={styles.postContent}>{renderFormattedTokens(text)}</Text>
+      </View>
+    );
+  }
+
+  const truncated = text.slice(0, maxLength).trim();
+
+  return (
+    <View style={styles.contentWrap}>
+      <Text style={styles.postContent}>
+        {expanded ? renderFormattedTokens(text) : renderFormattedTokens(truncated)}
+        {!expanded ? '... ' : ' '}
+        <Text
+          style={styles.readMoreText}
+          onPress={() => setExpanded(!expanded)}
+        >
+          {expanded ? 'Show less' : 'Read more'}
+        </Text>
+      </Text>
+    </View>
+  );
+};
+
+const ExpandableComment = ({ text, maxLength = 95 }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!text) return null;
+  const isLong = text.length > maxLength;
+
+  if (!isLong) {
+    return <Text style={styles.commentText}>{text}</Text>;
+  }
+
+  return (
+    <Text style={styles.commentText}>
+      {expanded ? text : `${text.slice(0, maxLength).trim()}... `}
+      <Text
+        style={styles.commentReadMore}
+        onPress={() => setExpanded(!expanded)}
+      >
+        {expanded ? 'Less' : 'More'}
+      </Text>
+    </Text>
+  );
+};
+
 const PostsScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { t } = useTranslation();
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [newPostText, setNewPostText] = useState('');
+  const [creatingPost, setCreatingPost] = useState(false);
   const [activeCommentPostId, setActiveCommentPostId] = useState(null);
   const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [downloadingPostId, setDownloadingPostId] = useState(null);
   const [viewerUri, setViewerUri] = useState(null);
 
@@ -40,11 +133,12 @@ const PostsScreen = ({ navigation }) => {
       setPosts(response.data || []);
     } catch (error) {
       if (!isAbortError(error)) {
-        console.error('Error:', error);
+        console.error('Error fetching posts:', error);
       }
     } finally {
       if (!signal?.aborted) {
         setLoading(false);
+        setRefreshing(false);
       }
     }
   }, []);
@@ -57,25 +151,37 @@ const PostsScreen = ({ navigation }) => {
     }, [fetchPosts, posts.length])
   );
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPosts(null, false);
+  };
+
   const createPost = async () => {
     if (!newPostText.trim()) {
       Alert.alert(t('common.error'), t('posts.enterContent'));
       return;
     }
 
+    setCreatingPost(true);
     try {
-      const response = await api.post('/posts', { content: newPostText });
+      const response = await api.post('/posts', { content: newPostText.trim() });
       setPosts([response.data, ...posts]);
       setNewPostText('');
     } catch (error) {
       Alert.alert(t('common.error'), t('posts.createFailed'));
+    } finally {
+      setCreatingPost(false);
     }
   };
 
   const handleLike = async (postId) => {
     try {
-      const post = posts.find(p => p._id === postId);
-      const isLiked = post.likes && post.likes.some(id => id === user?._id || id?._id === user?._id);
+      const post = posts.find((p) => p._id === postId);
+      const isLiked =
+        post.likes &&
+        post.likes.some(
+          (id) => id === user?._id || id?._id === user?._id || String(id) === String(user?._id)
+        );
 
       if (isLiked) {
         const response = await api.post(`/posts/${postId}/unlike`);
@@ -91,19 +197,34 @@ const PostsScreen = ({ navigation }) => {
 
   const handleComment = async (postId) => {
     if (!commentText.trim()) return;
+
+    setSubmittingComment(true);
     try {
-      const response = await api.post(`/posts/${postId}/comment`, { text: commentText });
+      const response = await api.post(`/posts/${postId}/comment`, { text: commentText.trim() });
       updatePostInState(postId, { comments: response.data.comments });
       setCommentText('');
     } catch (error) {
       Alert.alert(t('common.error'), t('posts.commentFailed'));
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
   const updatePostInState = (postId, updatedFields) => {
-    setPosts(prevPosts =>
-      prevPosts.map(p => (p._id === postId ? { ...p, ...updatedFields } : p))
+    setPosts((prevPosts) =>
+      prevPosts.map((p) => (p._id === postId ? { ...p, ...updatedFields } : p))
     );
+  };
+
+  const handleShare = async (post) => {
+    try {
+      const shareMessage = `${post.author?.name || 'Free Business Partner'}: "${post.content}"\n\nShared via Free Business App`;
+      await Share.share({
+        message: shareMessage,
+      });
+    } catch (err) {
+      console.log('Share error:', err);
+    }
   };
 
   const handleDownloadMedia = async (post) => {
@@ -160,17 +281,12 @@ const PostsScreen = ({ navigation }) => {
       setPosts((prev) => prev.filter((p) => p._id !== postId));
       Alert.alert(t('common.success'), t('posts.postDeleted'));
     } catch (error) {
-      Alert.alert(
-        t('common.error'),
-        getApiErrorMessage(error, t('posts.deleteFailed'))
-      );
+      Alert.alert(t('common.error'), getApiErrorMessage(error, t('posts.deleteFailed')));
     }
   };
 
   const renderPost = ({ item }) => {
-    if (!item) {
-      return null;
-    }
+    if (!item) return null;
 
     const likes = Array.isArray(item.likes) ? item.likes : [];
     const isLiked = likes.some(
@@ -179,11 +295,7 @@ const PostsScreen = ({ navigation }) => {
     const mediaUrl = resolveMediaUrl(item.imageUrl);
     const mediaType = mediaUrl ? detectMediaType(mediaUrl) : null;
     const isDownloading = downloadingPostId === item._id;
-    const postDate = item.createdAt ? new Date(item.createdAt) : null;
-    const dateLabel =
-      postDate && !Number.isNaN(postDate.getTime())
-        ? postDate.toLocaleDateString()
-        : '';
+    const timeAgo = formatRelativeTime(item.createdAt);
 
     const authorId = item.author?._id || item.author;
     const authorName = item.author?.name || t('common.user');
@@ -191,9 +303,11 @@ const PostsScreen = ({ navigation }) => {
 
     return (
       <View style={styles.postCard}>
+        {/* Post Header */}
         <View style={styles.postHeader}>
           <TouchableOpacity
             style={styles.authorRow}
+            activeOpacity={0.8}
             onPress={() => {
               if (authorId) {
                 navigation.navigate('UserProfile', { userId: authorId.toString() });
@@ -201,76 +315,172 @@ const PostsScreen = ({ navigation }) => {
             }}
             disabled={!authorId}
           >
-            <Avatar uri={authorAvatar} name={authorName} size={40} />
-            <Text style={styles.postAuthor}>{authorName}</Text>
+            <Avatar uri={authorAvatar} name={authorName} size={42} />
+            <View style={styles.authorMeta}>
+              <View style={styles.nameRow}>
+                <Text style={styles.postAuthor} numberOfLines={1}>
+                  {authorName}
+                </Text>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={14}
+                  color="#D4AF37"
+                  style={styles.verifiedIcon}
+                />
+              </View>
+              <Text style={styles.postDate}>{timeAgo || 'Recently'}</Text>
+            </View>
           </TouchableOpacity>
+
           {isPostAuthor(item) ? (
-            <TouchableOpacity onPress={() => confirmDeletePost(item)}>
-              <Text style={styles.deletePostText}>{t('posts.deletePost')}</Text>
+            <TouchableOpacity
+              onPress={() => confirmDeletePost(item)}
+              style={styles.deleteButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
             </TouchableOpacity>
           ) : null}
         </View>
-        <Text style={styles.postContent}>{item.content || ''}</Text>
 
+        {/* Post Body Content with Expandable Read More & Hashtags */}
+        <ExpandableText text={item.content} maxLength={160} />
+
+        {/* Media Container */}
         {mediaUrl ? (
           <View style={styles.mediaContainer}>
-            <TouchableOpacity activeOpacity={0.9} onPress={() => setViewerUri(mediaUrl)}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={() => setViewerUri(mediaUrl)}
+            >
               {mediaType === 'video' ? (
                 <View style={styles.videoPlaceholder}>
-                  <Text style={styles.videoPlaceholderText}>▶ {t('posts.tapToView')}</Text>
+                  <Ionicons name="play-circle" size={54} color="#D4AF37" />
+                  <Text style={styles.videoPlaceholderText}>{t('posts.tapToView')}</Text>
                 </View>
               ) : (
-                <Image source={{ uri: mediaUrl }} style={styles.postImage} />
+                <View style={styles.imageWrapper}>
+                  <Image source={{ uri: mediaUrl }} style={styles.postImage} />
+                  <View style={styles.expandBadge}>
+                    <Ionicons name="scan-outline" size={13} color="#FFFFFF" />
+                    <Text style={styles.expandBadgeText}>Tap to zoom</Text>
+                  </View>
+                </View>
               )}
             </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.downloadButton}
               onPress={() => handleDownloadMedia(item)}
               disabled={isDownloading}
+              activeOpacity={0.8}
             >
               {isDownloading ? (
-                <ActivityIndicator size="small" color="#000000" />
+                <ActivityIndicator size="small" color="#0A0A0E" />
               ) : (
-                <Text style={styles.downloadButtonText}>⬇ {t('posts.download')}</Text>
+                <View style={styles.downloadInner}>
+                  <Ionicons name="cloud-download-outline" size={15} color="#0A0A0E" />
+                  <Text style={styles.downloadButtonText}>Save</Text>
+                </View>
               )}
             </TouchableOpacity>
           </View>
         ) : null}
 
-        {dateLabel ? <Text style={styles.postDate}>{dateLabel}</Text> : null}
-
+        {/* Modern Action Bar */}
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item._id)}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleLike(item._id)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={19}
+              color={isLiked ? '#D4AF37' : '#8A8A96'}
+            />
             <Text style={[styles.actionText, isLiked && styles.actionTextActive]}>
-              👍 {t('posts.like')} ({likes.length})
+              {likes.length > 0 ? likes.length : ''} {t('posts.like')}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => toggleCommentSection(item._id)}>
-            <Text style={styles.actionText}>
-              💬 {t('posts.comment')} ({item.comments ? item.comments.length : 0})
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => toggleCommentSection(item._id)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={18}
+              color={activeCommentPostId === item._id ? '#D4AF37' : '#8A8A96'}
+            />
+            <Text
+              style={[
+                styles.actionText,
+                activeCommentPostId === item._id && styles.actionTextActive,
+              ]}
+            >
+              {item.comments?.length > 0 ? item.comments.length : ''}{' '}
+              {t('posts.comment')}
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleShare(item)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={18} color="#8A8A96" />
+            <Text style={styles.actionText}>Share</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Comment Thread Drawer */}
         {activeCommentPostId === item._id && (
           <View style={styles.commentSection}>
-            {item.comments && item.comments.map((comment, index) => (
-              <View key={index} style={styles.commentItem}>
-                <Text style={styles.commentAuthor}>{comment.user?.name || t('common.user')}</Text>
-                <Text style={styles.commentText}>{comment.text}</Text>
-              </View>
-            ))}
+            {item.comments && item.comments.length > 0 ? (
+              item.comments.map((comment, index) => (
+                <View key={index} style={styles.commentItem}>
+                  <View style={styles.commentAvatarMini}>
+                    <Text style={styles.commentInitial}>
+                      {(comment.user?.name || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.commentBubble}>
+                    <Text style={styles.commentAuthor} numberOfLines={1}>
+                      {comment.user?.name || t('common.user')}
+                    </Text>
+                    <ExpandableComment text={comment.text} maxLength={95} />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noCommentsText}>
+                No comments yet. Start the conversation!
+              </Text>
+            )}
 
             <View style={styles.commentInputRow}>
               <TextInput
                 style={styles.commentInput}
                 placeholder={t('posts.writeComment')}
-                placeholderTextColor="#888"
+                placeholderTextColor="#666672"
                 value={commentText}
                 onChangeText={setCommentText}
               />
-              <TouchableOpacity style={styles.sendCommentButton} onPress={() => handleComment(item._id)}>
-                <Text style={styles.sendCommentText}>{t('posts.send')}</Text>
+              <TouchableOpacity
+                style={[
+                  styles.sendCommentButton,
+                  !commentText.trim() && styles.sendCommentButtonDisabled,
+                ]}
+                onPress={() => handleComment(item._id)}
+                disabled={submittingComment || !commentText.trim()}
+              >
+                {submittingComment ? (
+                  <ActivityIndicator size="small" color="#0A0A0E" />
+                ) : (
+                  <Ionicons name="send" size={16} color="#0A0A0E" />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -279,45 +489,129 @@ const PostsScreen = ({ navigation }) => {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#D4AF37" />
-      </View>
-    );
-  }
-
+  // Header with Top Luxury Bar & Interactive Post Composer
   const listHeader = (
-    <View style={styles.createPostContainer}>
-      <TextInput
-        style={styles.postInput}
-        placeholder={t('posts.whatsOnMind')}
-        placeholderTextColor="#888"
-        value={newPostText}
-        onChangeText={setNewPostText}
-        multiline
-      />
-      <TouchableOpacity style={styles.postButton} onPress={createPost}>
-        <Text style={styles.postButtonText}>{t('posts.postButton')}</Text>
-      </TouchableOpacity>
+    <View style={styles.headerContainer}>
+      {/* Top Banner */}
+      <View style={styles.topFeedBar}>
+        <View>
+          <View style={styles.feedStatusRow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.feedStatusText}>BUSINESS COMMUNITY</Text>
+          </View>
+          <Text style={styles.feedTitle}>Market Updates & Deals</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.addMediaPostBtn}
+          onPress={() => navigation.navigate('AddPost')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="image-outline" size={18} color="#D4AF37" />
+          <Text style={styles.addMediaPostBtnText}>Add Media</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Interactive Quick Composer */}
+      <View style={styles.composerCard}>
+        <View style={styles.composerTopRow}>
+          <Avatar
+            uri={user?.profileImage || user?.avatar}
+            name={user?.name}
+            size={38}
+          />
+          <TextInput
+            style={styles.composerInput}
+            placeholder="Share a property update, deal, or market insight..."
+            placeholderTextColor="#686875"
+            value={newPostText}
+            onChangeText={setNewPostText}
+            multiline
+          />
+        </View>
+
+        <View style={styles.composerBottomRow}>
+          <TouchableOpacity
+            style={styles.composerActionChip}
+            onPress={() => navigation.navigate('AddPost')}
+          >
+            <Ionicons name="camera-outline" size={16} color="#D4AF37" />
+            <Text style={styles.composerActionText}>Photo/Video</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.composerActionChip}
+            onPress={() => navigation.navigate('AddProperty')}
+          >
+            <Ionicons name="business-outline" size={16} color="#D4AF37" />
+            <Text style={styles.composerActionText}>List Property</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.composerSubmitBtn,
+              !newPostText.trim() && styles.composerSubmitBtnDisabled,
+            ]}
+            onPress={createPost}
+            disabled={creatingPost || !newPostText.trim()}
+            activeOpacity={0.8}
+          >
+            {creatingPost ? (
+              <ActivityIndicator size="small" color="#0A0A0E" />
+            ) : (
+              <Text style={styles.composerSubmitText}>Post</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={posts}
-        renderItem={renderPost}
-        keyExtractor={(item, index) => item._id?.toString() || `post-${index}`}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={listHeader}
-      />
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
 
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#D4AF37" />
+          <Text style={styles.loadingText}>Loading community feed...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          renderItem={renderPost}
+          keyExtractor={(item, index) => item._id?.toString() || `post-${index}`}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={listHeader}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#D4AF37"
+              colors={['#D4AF37']}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Ionicons name="chatbubbles-outline" size={48} color="#D4AF37" />
+              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Be the first to share a property deal, society update, or question!
+              </Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
+        activeOpacity={0.85}
         onPress={() => navigation.navigate('AddPost')}
       >
-        <Text style={styles.fabText}>+</Text>
+        <Ionicons name="add" size={28} color="#0A0A0E" />
       </TouchableOpacity>
 
       <MediaViewerModal
@@ -332,105 +626,273 @@ const PostsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#0A0A0E',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: '#0A0A0E',
   },
-  createPostContainer: {
-    backgroundColor: '#1a1a1a',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D4AF37',
-  },
-  postInput: {
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    padding: 10,
-    borderRadius: 8,
-    minHeight: 60,
-    textAlignVertical: 'top',
-    backgroundColor: '#000000',
-    color: '#D4AF37',
-  },
-  postButton: {
-    backgroundColor: '#D4AF37',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
+  loadingText: {
+    color: '#8A8A96',
+    fontSize: 13,
     marginTop: 10,
   },
-  postButtonText: {
-    color: '#000000',
-    fontWeight: '600',
-  },
   list: {
-    padding: 15,
+    paddingBottom: 85,
   },
-  postCard: {
-    backgroundColor: '#1a1a1a',
-    padding: 15,
-    marginBottom: 15,
-    borderRadius: 8,
+
+  /* Header & Composer */
+  headerContainer: {
+    marginBottom: 8,
+  },
+  topFeedBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    backgroundColor: '#0A0A0E',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A22',
+  },
+  feedStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ADE80',
+    marginRight: 6,
+  },
+  feedStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.6,
+  },
+  feedTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  addMediaPostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16161E',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#D4AF3750',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  addMediaPostBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D4AF37',
+    marginLeft: 6,
+  },
+
+  /* Quick Composer */
+  composerCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 8,
+    backgroundColor: '#141419',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#262632',
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  composerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  composerInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#FFFFFF',
+    minHeight: 48,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+    paddingTop: 6,
+  },
+  composerBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#202028',
+    paddingTop: 10,
+    marginTop: 8,
+  },
+  composerActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1C1C24',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  composerActionText: {
+    fontSize: 11,
+    color: '#C0C0C8',
+    fontWeight: '600',
+    marginLeft: 5,
+  },
+  composerSubmitBtn: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  composerSubmitBtnDisabled: {
+    opacity: 0.45,
+  },
+  composerSubmitText: {
+    color: '#0A0A0E',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  /* Post Card */
+  postCard: {
+    backgroundColor: '#141419',
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#242430',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   postHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 10,
+  },
+  authorMeta: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    marginRight: 6,
   },
   postAuthor: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#D4AF37',
-    flex: 1,
-    marginLeft: 10,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.1,
+    flexShrink: 1,
   },
-  deletePostText: {
-    color: '#ff6b6b',
-    fontSize: 13,
-    fontWeight: '600',
+  verifiedIcon: {
+    marginLeft: 5,
+  },
+  postDate: {
+    fontSize: 11,
+    color: '#7A7A88',
+    marginTop: 2,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  contentWrap: {
+    marginBottom: 12,
   },
   postContent: {
-    fontSize: 16,
-    marginBottom: 10,
-    color: '#ddd',
+    fontSize: 14.5,
+    color: '#E2E2EA',
+    lineHeight: 21,
   },
+  readMoreText: {
+    color: '#D4AF37',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  hashtagText: {
+    color: '#E0B548',
+    fontWeight: '600',
+  },
+  commentReadMore: {
+    color: '#D4AF37',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+
+  /* Media Display */
   mediaContainer: {
-    marginBottom: 10,
+    marginBottom: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
     position: 'relative',
+    backgroundColor: '#0D0D12',
+    borderWidth: 1,
+    borderColor: '#20202A',
+  },
+  imageWrapper: {
+    position: 'relative',
+  },
+  expandBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 10, 14, 0.72)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  expandBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   postImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 8,
+    height: 220,
     resizeMode: 'cover',
   },
   videoPlaceholder: {
     width: '100%',
     height: 200,
-    borderRadius: 8,
-    backgroundColor: '#111111',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D4AF37',
+    backgroundColor: '#121218',
   },
   videoPlaceholderText: {
     color: '#D4AF37',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 8,
   },
   downloadButton: {
     position: 'absolute',
@@ -438,108 +900,164 @@ const styles = StyleSheet.create({
     right: 10,
     backgroundColor: '#D4AF37',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 8,
-    minWidth: 100,
+  },
+  downloadInner: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
   downloadButtonText: {
-    color: '#000000',
-    fontWeight: 'bold',
-    fontSize: 13,
+    color: '#0A0A0E',
+    fontWeight: '700',
+    fontSize: 11,
+    marginLeft: 4,
   },
-  postDate: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 10,
-  },
+
+  /* Actions Bar */
   actionRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     borderTopWidth: 1,
-    borderTopColor: '#333',
-    paddingTop: 10,
-    marginTop: 5,
+    borderTopColor: '#202028',
+    paddingTop: 12,
+    marginTop: 4,
   },
   actionButton: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
   },
   actionText: {
-    color: '#888',
-    fontWeight: 'bold',
+    color: '#8A8A96',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   actionTextActive: {
     color: '#D4AF37',
+    fontWeight: '700',
   },
+
+  /* Comments Drawer */
   commentSection: {
-    marginTop: 15,
+    marginTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#333',
-    paddingTop: 10,
+    borderTopColor: '#202028',
+    paddingTop: 12,
   },
   commentItem: {
-    backgroundColor: '#000000',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  commentAvatarMini: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#D4AF37',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    marginTop: 2,
+  },
+  commentInitial: {
+    color: '#0A0A0E',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  commentBubble: {
+    flex: 1,
+    backgroundColor: '#0D0D12',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1E1E26',
   },
   commentAuthor: {
     color: '#D4AF37',
-    fontWeight: 'bold',
-    fontSize: 12,
+    fontWeight: '700',
+    fontSize: 11,
     marginBottom: 2,
   },
   commentText: {
-    color: '#ddd',
-    fontSize: 14,
+    color: '#D8D8E0',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  noCommentsText: {
+    fontSize: 12,
+    color: '#686875',
+    textAlign: 'center',
+    marginVertical: 8,
   },
   commentInputRow: {
     flexDirection: 'row',
-    marginTop: 5,
+    marginTop: 8,
     alignItems: 'center',
   },
   commentInput: {
     flex: 1,
+    backgroundColor: '#0D0D12',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#262632',
     borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    color: '#D4AF37',
-    backgroundColor: '#000000',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    color: '#FFFFFF',
+    fontSize: 13,
   },
   sendCommentButton: {
-    marginLeft: 10,
+    marginLeft: 8,
     backgroundColor: '#D4AF37',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sendCommentText: {
-    color: '#000000',
-    fontWeight: 'bold',
+  sendCommentButtonDisabled: {
+    opacity: 0.4,
   },
+
+  /* Empty State */
+  emptyWrap: {
+    paddingVertical: 50,
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 12,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#7A7A88',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+
+  /* Floating Action Button */
   fab: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 22,
     right: 20,
     backgroundColor: '#D4AF37',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#D4AF37',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  fabText: {
-    color: '#000000',
-    fontSize: 30,
-    fontWeight: 'bold',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });
 

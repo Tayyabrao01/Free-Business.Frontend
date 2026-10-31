@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 import { disconnectStreamClients } from '../services/streamClientService';
 import { setUnauthorizedHandler } from '../services/authSession';
 import { normalizePhone } from '../services/phoneOtpService';
+import { markHasRegistered } from '../services/OnboardingService';
 import {
   ensureNotificationsReady,
   requestNotificationPermission,
@@ -81,6 +82,7 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(user);
+      markHasRegistered().catch(() => {});
       ensureNotificationsReady().catch(() => {});
       requestNotificationPermission().catch(() => {});
       return { success: true };
@@ -114,6 +116,7 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(user);
+      markHasRegistered().catch(() => {});
       ensureNotificationsReady().catch(() => {});
       requestNotificationPermission().catch(() => {});
       return { success: true };
@@ -149,6 +152,7 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(nextUser);
+      markHasRegistered().catch(() => {});
       ensureNotificationsReady().catch(() => {});
       requestNotificationPermission().catch(() => {});
       return { success: true, user: nextUser };
@@ -174,6 +178,7 @@ export const AuthProvider = ({ children }) => {
       api.defaults.headers.Authorization = `Bearer ${token}`;
       setToken(token);
       setUser(nextUser);
+      markHasRegistered().catch(() => {});
       ensureNotificationsReady().catch(() => {});
       requestNotificationPermission().catch(() => {});
       return { success: true };

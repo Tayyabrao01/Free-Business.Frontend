@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   FlatList,
+  StatusBar,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -55,7 +56,7 @@ const RewardsScreen = ({ navigation }) => {
         setRefreshing(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -87,7 +88,9 @@ const RewardsScreen = ({ navigation }) => {
 
   const renderLeaderboardItem = ({ item }) => (
     <View style={styles.leaderRow}>
-      <Text style={styles.leaderRank}>#{item.rank}</Text>
+      <View style={styles.rankBadge}>
+        <Text style={styles.leaderRank}>#{item.rank}</Text>
+      </View>
       <View style={styles.leaderInfo}>
         <Text style={styles.leaderName}>{item.name}</Text>
         <Text style={styles.leaderMeta}>
@@ -95,272 +98,588 @@ const RewardsScreen = ({ navigation }) => {
           {COMMISSION_ENABLED ? ` • ${formatAmount(item.totalCommission)}` : ''}
         </Text>
       </View>
+      <Ionicons name="medal-outline" size={18} color="#D4AF37" />
     </View>
   );
 
   const listHeader = (
     <>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('rewards.title')}</Text>
-        <Text style={styles.headerSubtitle}>{t('rewards.earnPoints')}</Text>
-        {progress?.currentTier && progress.currentTier !== 'none' && (
-          <View style={styles.currentTierBadge}>
-            <Text style={styles.currentTierText}>
-              {t('rewards.currentTier')}: {t(`rewards.${progress.currentTier}`)}
-            </Text>
+      {/* Top App Bar */}
+      <View style={styles.topBar}>
+        {navigation.canGoBack() ? (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : null}
+
+        <View style={styles.titleCol}>
+          <View style={styles.statusBadgeRow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.statusBadgeText}>OFFICIAL CASH REWARDS</Text>
           </View>
-        )}
+          <Text style={styles.topTitle}>{t('rewards.title')}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.historyBtn}
+          onPress={() => navigation.navigate('RewardHistory')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="time-outline" size={16} color="#D4AF37" />
+          <Text style={styles.historyBtnText}>History</Text>
+        </TouchableOpacity>
       </View>
 
+      {/* Program Announcement Banner */}
+      <View style={styles.announcementCard}>
+        <View style={styles.announcementTopRow}>
+          <Ionicons name="trophy" size={22} color="#D4AF37" />
+          <View style={styles.announcementTextCol}>
+            <Text style={styles.announcementTitle}>Cash Milestones Program</Text>
+            <Text style={styles.announcementSub}>{t('rewards.earnPoints')}</Text>
+          </View>
+        </View>
+
+        {progress?.currentTier && progress.currentTier !== 'none' ? (
+          <View style={styles.currentTierBadge}>
+            <Ionicons name="star" size={12} color="#D4AF37" />
+            <Text style={styles.currentTierText}>
+              Current Tier: {t(`rewards.${progress.currentTier}`) || progress.currentTier}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Stats Counters */}
       <View style={styles.statsRow}>
         {COMMISSION_ENABLED ? (
           <View style={styles.statCard}>
+            <Ionicons name="cash-outline" size={18} color="#D4AF37" style={{ marginBottom: 4 }} />
             <Text style={styles.statValue}>{formatAmount(progress?.totalCommission || 0)}</Text>
             <Text style={styles.statLabel}>{t('rewards.totalCommission')}</Text>
           </View>
         ) : null}
         <View style={styles.statCard}>
+          <Ionicons name="checkmark-done-circle-outline" size={18} color="#10B981" style={{ marginBottom: 4 }} />
           <Text style={styles.statValue}>{progress?.totalSales || 0}</Text>
           <Text style={styles.statLabel}>{t('rewards.totalSales')}</Text>
         </View>
       </View>
 
-      {progress?.tiers?.map((tierData) => (
-        <View
-          key={tierData.tier}
-          style={[styles.tierCard, { borderColor: TIER_COLORS[tierData.tier] }]}
-        >
-          <View style={styles.tierHeader}>
-            <Ionicons name="trophy-outline" size={24} color={TIER_COLORS[tierData.tier]} />
-            <View style={styles.tierHeaderText}>
-              <Text style={[styles.tierName, { color: TIER_COLORS[tierData.tier] }]}>
-                {t(`rewards.${tierData.tier}`)}
-              </Text>
-              <Text style={styles.tierPrize}>{formatAmount(tierData.rewardAmount)}</Text>
-            </View>
-          </View>
+      {/* Tier Milestone Cards */}
+      <Text style={styles.sectionHeading}>Tier Cash Milestones</Text>
+      {progress?.tiers?.map((tierData) => {
+        const tierColor = TIER_COLORS[tierData.tier] || '#D4AF37';
 
-          <ProgressBar
-            label={t('rewards.followers')}
-            current={tierData.progress.followers}
-            target={tierData.requirements.followers}
-            percentage={tierData.percentages.followers}
-            color={TIER_COLORS[tierData.tier]}
-          />
-          <ProgressBar
-            label={t('rewards.posts')}
-            current={tierData.progress.posts}
-            target={tierData.requirements.posts}
-            percentage={tierData.percentages.posts}
-            color={TIER_COLORS[tierData.tier]}
-          />
-          <ProgressBar
-            label={t('rewards.salesRents')}
-            current={tierData.progress.sales}
-            target={tierData.requirements.sales}
-            percentage={tierData.percentages.sales}
-            color={TIER_COLORS[tierData.tier]}
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.claimButton,
-              { backgroundColor: tierData.eligible ? TIER_COLORS[tierData.tier] : '#333333' },
-            ]}
-            disabled={!tierData.eligible || claimingTier === tierData.tier}
-            onPress={() => handleClaim(tierData.tier)}
+        return (
+          <View
+            key={tierData.tier}
+            style={[styles.tierCard, { borderColor: `${tierColor}50` }]}
           >
-            {claimingTier === tierData.tier ? (
-              <ActivityIndicator color="#000000" />
-            ) : (
-              <Text style={styles.claimButtonText}>
-                {tierData.eligible ? t('rewards.claimReward') : t('rewards.notEligible')}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      ))}
+            <View style={styles.tierHeader}>
+              <View style={[styles.tierIconWrap, { backgroundColor: `${tierColor}20` }]}>
+                <Ionicons name="trophy" size={22} color={tierColor} />
+              </View>
+              <View style={styles.tierHeaderText}>
+                <Text style={[styles.tierName, { color: tierColor }]}>
+                  {t(`rewards.${tierData.tier}`) || tierData.tier} Tier
+                </Text>
+                <Text style={styles.tierPrize}>{formatAmount(tierData.rewardAmount)} Prize</Text>
+              </View>
+              {tierData.eligible ? (
+                <View style={[styles.eligibleChip, { backgroundColor: `${tierColor}25` }]}>
+                  <Text style={[styles.eligibleChipText, { color: tierColor }]}>Unlocked</Text>
+                </View>
+              ) : null}
+            </View>
 
-      <View style={styles.section}>
+            <ProgressBar
+              label={t('rewards.followers')}
+              current={tierData.progress.followers}
+              target={tierData.requirements.followers}
+              percentage={tierData.percentages.followers}
+              color={tierColor}
+            />
+            <ProgressBar
+              label={t('rewards.posts')}
+              current={tierData.progress.posts}
+              target={tierData.requirements.posts}
+              percentage={tierData.percentages.posts}
+              color={tierColor}
+            />
+            <ProgressBar
+              label={t('rewards.salesRents')}
+              current={tierData.progress.sales}
+              target={tierData.requirements.sales}
+              percentage={tierData.percentages.sales}
+              color={tierColor}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.claimButton,
+                tierData.eligible
+                  ? { backgroundColor: tierColor }
+                  : styles.claimButtonLocked,
+              ]}
+              disabled={!tierData.eligible || claimingTier === tierData.tier}
+              onPress={() => handleClaim(tierData.tier)}
+              activeOpacity={0.85}
+            >
+              {claimingTier === tierData.tier ? (
+                <ActivityIndicator color="#0A0A0E" />
+              ) : (
+                <Text
+                  style={[
+                    styles.claimButtonText,
+                    !tierData.eligible && styles.claimButtonTextLocked,
+                  ]}
+                >
+                  {tierData.eligible ? t('rewards.claimReward') : t('rewards.notEligible')}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        );
+      })}
+
+      <View style={styles.leaderboardSectionHeader}>
+        <Ionicons name="podium-outline" size={18} color="#D4AF37" />
         <Text style={styles.sectionTitle}>{t('rewards.leaderboard')}</Text>
       </View>
     </>
   );
 
   const listFooter = (
-    <>
+    <View style={styles.footerWrap}>
       <TouchableOpacity
-        style={styles.linkButton}
+        style={styles.historyLinkButton}
         onPress={() => navigation.navigate('RewardHistory')}
+        activeOpacity={0.8}
       >
-        <Text style={styles.linkButtonText}>{t('rewards.viewHistory')}</Text>
+        <Ionicons name="receipt-outline" size={17} color="#D4AF37" />
+        <Text style={styles.historyLinkText}>{t('rewards.viewHistory')}</Text>
       </TouchableOpacity>
 
       {REFERRAL_ENABLED ? (
         <TouchableOpacity
-          style={styles.linkButton}
+          style={styles.referralLinkButton}
           onPress={() => navigation.navigate('Referral')}
+          activeOpacity={0.8}
         >
-          <Text style={styles.linkButtonText}>{t('rewards.referralProgram')}</Text>
+          <Ionicons name="gift-outline" size={17} color="#0A0A0E" />
+          <Text style={styles.referralLinkText}>{t('rewards.referralProgram')}</Text>
         </TouchableOpacity>
       ) : null}
-      <View style={styles.bottomPad} />
-    </>
+    </View>
   );
 
   if (loading) {
     return (
       <View style={styles.center}>
+        <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
         <ActivityIndicator size="large" color="#D4AF37" />
-      </View>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{loadError}</Text>
-        <TouchableOpacity
-          style={styles.retryBtn}
-          onPress={() => {
-            setLoading(true);
-            const controller = new AbortController();
-            loadData(controller.signal);
-          }}
-        >
-          <Text style={styles.retryBtnText}>{t('stream.retry')}</Text>
-        </TouchableOpacity>
+        <Text style={styles.loadingText}>Loading rewards program...</Text>
       </View>
     );
   }
 
   return (
-    <FlatList
-      style={styles.list}
-      data={leaderboard.slice(0, 10)}
-      renderItem={renderLeaderboardItem}
-      keyExtractor={(item) => `${item.rank}-${item.name}`}
-      ListHeaderComponent={listHeader}
-      ListFooterComponent={listFooter}
-      contentContainerStyle={styles.listContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            const controller = new AbortController();
-            loadData(controller.signal);
-          }}
-          tintColor="#D4AF37"
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
+
+      {loadError ? (
+        <View style={styles.center}>
+          <Ionicons name="alert-circle-outline" size={48} color="#D4AF37" />
+          <Text style={styles.errorText}>{loadError}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => {
+              setLoading(true);
+              const controller = new AbortController();
+              loadData(controller.signal);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.retryBtnText}>{t('common.retry') || 'Retry'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={leaderboard.slice(0, 10)}
+          renderItem={renderLeaderboardItem}
+          keyExtractor={(item) => `${item.rank}-${item.name}`}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                const controller = new AbortController();
+                loadData(controller.signal);
+              }}
+              tintColor="#D4AF37"
+              colors={['#D4AF37']}
+            />
+          }
         />
-      }
-    />
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  list: { flex: 1, backgroundColor: '#000000' },
-  listContent: { paddingBottom: 24 },
+  root: {
+    flex: 1,
+    backgroundColor: '#0A0A0E',
+  },
+  listContent: {
+    paddingBottom: 40,
+  },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: '#0A0A0E',
     padding: 24,
   },
-  errorText: { color: '#ff6b6b', fontSize: 14, textAlign: 'center', marginBottom: 16, lineHeight: 22 },
+  loadingText: {
+    color: '#8A8A96',
+    marginTop: 12,
+    fontSize: 13,
+  },
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
   retryBtn: {
     backgroundColor: '#D4AF37',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 10,
   },
-  retryBtnText: { color: '#000000', fontWeight: '700', fontSize: 15 },
-  header: {
-    backgroundColor: '#D4AF37',
-    padding: 24,
-    paddingTop: 50,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+  retryBtnText: {
+    color: '#0A0A0E',
+    fontWeight: '700',
+    fontSize: 14,
   },
-  headerTitle: { fontSize: 26, fontWeight: 'bold', color: '#000000' },
-  headerSubtitle: { fontSize: 14, color: '#1a1a1a', marginTop: 6 },
-  currentTierBadge: {
-    marginTop: 12,
-    backgroundColor: '#000000',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
+
+  /* Top Bar */
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A22',
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#161620',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#262634',
+    marginRight: 10,
+  },
+  titleCol: {
+    flex: 1,
+  },
+  statusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ADE80',
+    marginRight: 6,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.6,
+  },
+  topTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  historyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161620',
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    gap: 4,
   },
-  currentTierText: { color: '#D4AF37', fontWeight: '600', fontSize: 12 },
-  statsRow: { flexDirection: 'row', padding: 16 },
+  historyBtnText: {
+    color: '#D4AF37',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  /* Announcement Card */
+  announcementCard: {
+    backgroundColor: '#141419',
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#242432',
+  },
+  announcementTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  announcementTextCol: {
+    flex: 1,
+  },
+  announcementTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  announcementSub: {
+    fontSize: 12,
+    color: '#8A8A96',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  currentTierBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1C1C28',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  currentTierText: {
+    color: '#D4AF37',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  /* Stats Row */
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginTop: 12,
+    gap: 10,
+  },
   statCard: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#141419',
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#D4AF37',
-    marginHorizontal: 4,
+    borderColor: '#22222E',
   },
-  statValue: { color: '#D4AF37', fontSize: 16, fontWeight: 'bold' },
-  statLabel: { color: '#888888', fontSize: 12, marginTop: 4 },
+  statValue: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  statLabel: {
+    color: '#8A8A96',
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginHorizontal: 18,
+    marginTop: 18,
+    marginBottom: 10,
+  },
+
+  /* Tier Cards */
   tierCard: {
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     padding: 16,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
+    backgroundColor: '#141419',
+    borderRadius: 16,
     borderWidth: 1,
   },
-  tierHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  tierHeaderText: { marginLeft: 12, flex: 1 },
-  tierName: { fontSize: 20, fontWeight: 'bold' },
-  tierPrize: { color: '#ffffff', fontSize: 16, fontWeight: '600', marginTop: 2 },
-  claimButton: { marginTop: 8, padding: 14, borderRadius: 8, alignItems: 'center' },
-  claimButtonText: { color: '#000000', fontWeight: 'bold', fontSize: 15 },
-  section: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 16,
-    paddingBottom: 0,
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    borderColor: '#333333',
+  tierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
   },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#D4AF37' },
+  tierIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tierHeaderText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  tierName: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  tierPrize: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  eligibleChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  eligibleChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  claimButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  claimButtonLocked: {
+    backgroundColor: '#1A1A24',
+    borderWidth: 1,
+    borderColor: '#262634',
+  },
+  claimButtonText: {
+    color: '#0A0A0E',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  claimButtonTextLocked: {
+    color: '#656575',
+  },
+
+  /* Leaderboard */
+  leaderboardSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 18,
+    marginTop: 18,
+    marginBottom: 10,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   leaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     marginHorizontal: 16,
-    backgroundColor: '#1a1a1a',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#333333',
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    marginBottom: 8,
+    backgroundColor: '#141419',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#20202A',
   },
-  leaderRank: { color: '#D4AF37', fontWeight: 'bold', width: 36, fontSize: 16 },
-  leaderInfo: { flex: 1 },
-  leaderName: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
-  leaderMeta: { color: '#888888', fontSize: 12, marginTop: 2 },
-  linkButton: {
+  rankBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#1C1C28',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  leaderRank: {
+    color: '#D4AF37',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  leaderInfo: {
+    flex: 1,
+  },
+  leaderName: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  leaderMeta: {
+    color: '#8A8A96',
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+
+  /* Footer */
+  footerWrap: {
     marginHorizontal: 16,
     marginTop: 12,
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    alignItems: 'center',
+    gap: 10,
   },
-  linkButtonText: { color: '#D4AF37', fontSize: 16, fontWeight: '600' },
-  bottomPad: { height: 16, backgroundColor: '#000000' },
+  historyLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+    backgroundColor: '#141419',
+    gap: 6,
+  },
+  historyLinkText: {
+    color: '#D4AF37',
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  referralLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#D4AF37',
+    gap: 6,
+  },
+  referralLinkText: {
+    color: '#0A0A0E',
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
 });
 
 export default RewardsScreen;

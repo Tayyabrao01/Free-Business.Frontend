@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
-  I18nManager,
+  StatusBar,
+  Share,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from '../hooks/useTranslation';
@@ -15,8 +16,10 @@ const PLOT_IDS = ['marla5', 'marla10', 'kanal1'];
 
 const PLOT_DATA = {
   marla5: {
+    title: '5 Marla Plot',
+    tag: 'Starter Plan',
     accent: '#D4AF37',
-    soft: 'rgba(212, 175, 55, 0.14)',
+    soft: 'rgba(212, 175, 55, 0.08)',
     soil: '#5C4030',
     grass: '#2F6B3A',
     currentPrice: 3430000,
@@ -25,10 +28,13 @@ const PLOT_DATA = {
     annualRent: 411600,
     savingsSale: 1570000,
     totalProfit: 1981400,
+    appreciationPercent: '+45.8%',
   },
   marla10: {
+    title: '10 Marla Plot',
+    tag: 'High Yield',
     accent: '#3DB8A8',
-    soft: 'rgba(61, 184, 168, 0.14)',
+    soft: 'rgba(61, 184, 168, 0.08)',
     soil: '#4A3428',
     grass: '#1F7A5A',
     currentPrice: 6290000,
@@ -37,10 +43,13 @@ const PLOT_DATA = {
     annualRent: 754800,
     savingsSale: 3710000,
     totalProfit: 4464800,
+    appreciationPercent: '+58.9%',
   },
   kanal1: {
+    title: '1 Kanal Estate',
+    tag: 'VIP Luxury',
     accent: '#E07A5F',
-    soft: 'rgba(224, 122, 95, 0.14)',
+    soft: 'rgba(224, 122, 95, 0.08)',
     soil: '#6B3E2E',
     grass: '#8B5A2B',
     currentPrice: 10320000,
@@ -49,11 +58,11 @@ const PLOT_DATA = {
     annualRent: 1238400,
     savingsSale: 4680000,
     totalProfit: 5938400,
+    appreciationPercent: '+45.3%',
   },
 };
 
-const formatNumber = (value) =>
-  Number(value).toLocaleString('en-PK');
+const formatNumber = (value) => Number(value).toLocaleString('en-PK');
 
 const PlotInformationScreen = ({ navigation }) => {
   const { t, isUrdu } = useTranslation();
@@ -66,14 +75,14 @@ const PlotInformationScreen = ({ navigation }) => {
   const switchPlot = (id) => {
     if (id === activeId) return;
     Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: 140, useNativeDriver: true }),
-      Animated.timing(slide, { toValue: 12, duration: 140, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(slide, { toValue: 10, duration: 120, useNativeDriver: true }),
     ]).start(() => {
       setActiveId(id);
-      slide.setValue(-12);
+      slide.setValue(-10);
       Animated.parallel([
-        Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
-        Animated.timing(slide, { toValue: 0, duration: 220, useNativeDriver: true }),
+        Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(slide, { toValue: 0, duration: 200, useNativeDriver: true }),
       ]).start();
     });
   };
@@ -83,27 +92,42 @@ const PlotInformationScreen = ({ navigation }) => {
     slide.setValue(0);
   }, [fade, slide]);
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${plot.title} Investment Plan:\nCurrent: PKR ${formatNumber(plot.currentPrice)}\nEstimated 1-Year Value: PKR ${formatNumber(plot.futureValue)}\nProjected Total Profit: PKR ${formatNumber(plot.totalProfit)}\nAvailable on Free Business App.`,
+        title: plot.title,
+      });
+    } catch (err) {
+      console.log('Share error', err);
+    }
+  };
+
   const rows = useMemo(
     () => [
       {
         icon: 'cash-outline',
         label: t('plotInformation.currentPrice'),
-        value: formatNumber(plot.currentPrice),
+        value: `PKR ${formatNumber(plot.currentPrice)}`,
+        sub: 'Current investment cost',
       },
       {
         icon: 'trending-up-outline',
         label: t('plotInformation.futureValue'),
-        value: formatNumber(plot.futureValue),
+        value: `PKR ${formatNumber(plot.futureValue)}`,
+        sub: 'Value after 1 year (Est.)',
       },
       {
         icon: 'calendar-outline',
         label: t('plotInformation.annualRent'),
-        value: formatNumber(plot.annualRent),
+        value: `PKR ${formatNumber(plot.annualRent)}`,
+        sub: 'Confirmed yearly returns',
       },
       {
         icon: 'pricetag-outline',
         label: t('plotInformation.savingsSale'),
-        value: formatNumber(plot.savingsSale),
+        value: `PKR ${formatNumber(plot.savingsSale)}`,
+        sub: 'Estimated capital growth',
       },
     ],
     [plot, t]
@@ -111,19 +135,37 @@ const PlotInformationScreen = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12}>
-          <Text style={styles.back}>{t('common.back')}</Text>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
+
+      {/* Top App Bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={[styles.title, isUrdu && styles.rtlText]}>
-          {t('plotInformation.title')}
-        </Text>
-        <Text style={[styles.subtitle, isUrdu && styles.rtlText]}>
-          {t('plotInformation.subtitle')}
-        </Text>
+
+        <View style={styles.titleCol}>
+          <View style={styles.statusBadgeRow}>
+            <View style={styles.onlineDot} />
+            <Text style={styles.statusBadgeText}>INVESTMENT CALCULATOR</Text>
+          </View>
+          <Text style={styles.topTitle}>{t('plotInformation.title')}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.actionIconBtn}
+          onPress={handleShare}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="share-outline" size={20} color="#D4AF37" />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.tabs}>
+      {/* Segmented Plot Size Selector */}
+      <View style={styles.tabsWrap}>
         {PLOT_IDS.map((id) => {
           const selected = id === activeId;
           const accent = PLOT_DATA[id].accent;
@@ -131,13 +173,18 @@ const PlotInformationScreen = ({ navigation }) => {
             <TouchableOpacity
               key={id}
               style={[
-                styles.tab,
+                styles.tabChip,
                 selected && { backgroundColor: accent, borderColor: accent },
               ]}
               onPress={() => switchPlot(id)}
-              activeOpacity={0.85}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.tabText, selected && styles.tabTextActive]}>
+              <Text
+                style={[
+                  styles.tabChipText,
+                  selected && styles.tabChipTextActive,
+                ]}
+              >
                 {t(`plotInformation.sizes.${id}`)}
               </Text>
             </TouchableOpacity>
@@ -154,30 +201,52 @@ const PlotInformationScreen = ({ navigation }) => {
           style={[
             styles.panel,
             {
-              borderColor: plot.accent,
-              backgroundColor: plot.soft,
+              borderColor: `${plot.accent}40`,
               opacity: fade,
               transform: [{ translateY: slide }],
             },
           ]}
         >
-          <Text style={[styles.sizeLabel, { color: plot.accent }, isUrdu && styles.rtlText]}>
-            {t(`plotInformation.sizes.${activeId}`)}
-          </Text>
+          {/* Header Row */}
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <View style={[styles.planBadge, { backgroundColor: `${plot.accent}20` }]}>
+                <Ionicons name="shield-checkmark" size={12} color={plot.accent} />
+                <Text style={[styles.planBadgeText, { color: plot.accent }]}>
+                  {plot.tag}
+                </Text>
+              </View>
+              <Text style={[styles.panelTitle, isUrdu && styles.rtlText]}>
+                {plot.title}
+              </Text>
+            </View>
 
-          <Text style={[styles.priceLine, isUrdu && styles.rtlText]}>
-            {t(`plotInformation.${activeId}.priceLine`)}
-          </Text>
-
-          <View style={styles.rentBlock}>
-            <Text style={[styles.rentValue, { color: plot.accent }]}>
-              {formatNumber(plot.monthlyRent)}
-            </Text>
-            <Text style={[styles.rentLabel, { color: plot.accent }, isUrdu && styles.rtlText]}>
-              {t('plotInformation.monthlyRent')}
-            </Text>
+            <View style={[styles.gainBadge, { backgroundColor: `${plot.accent}20` }]}>
+              <Ionicons name="trending-up" size={14} color={plot.accent} />
+              <Text style={[styles.gainBadgeText, { color: plot.accent }]}>
+                {plot.appreciationPercent}
+              </Text>
+            </View>
           </View>
 
+          {/* Monthly Rent Spotlight Card */}
+          <View style={styles.rentSpotlight}>
+            <View>
+              <Text style={[styles.rentLabel, isUrdu && styles.rtlText]}>
+                {t('plotInformation.monthlyRent')}
+              </Text>
+              <Text style={[styles.rentValue, { color: plot.accent }]}>
+                PKR {formatNumber(plot.monthlyRent)}
+                <Text style={styles.rentUnit}> / month</Text>
+              </Text>
+            </View>
+
+            <View style={[styles.rentIconCircle, { backgroundColor: `${plot.accent}20` }]}>
+              <Ionicons name="wallet-outline" size={22} color={plot.accent} />
+            </View>
+          </View>
+
+          {/* Plot Visual Schematic */}
           <PlotVisual
             accent={plot.accent}
             soil={plot.soil}
@@ -185,24 +254,33 @@ const PlotInformationScreen = ({ navigation }) => {
             badge={t(`plotInformation.sizes.${activeId}`)}
           />
 
-          <Text style={[styles.futureNote, isUrdu && styles.rtlText]}>
-            {t(`plotInformation.${activeId}.futureNote`)}
-          </Text>
+          {/* Growth Projection Note */}
+          <View style={styles.futureNoteCard}>
+            <Ionicons name="information-circle-outline" size={18} color="#D4AF37" />
+            <Text style={[styles.futureNoteText, isUrdu && styles.rtlText]}>
+              {t(`plotInformation.${activeId}.futureNote`)}
+            </Text>
+          </View>
 
-          <View style={styles.breakdown}>
+          {/* 4-Item Breakdown Grid */}
+          <View style={styles.breakdownGrid}>
             {rows.map((row) => (
-              <View key={row.label} style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons name={row.icon} size={18} color={plot.accent} />
-                  <Text style={[styles.rowLabel, isUrdu && styles.rtlText]}>{row.label}</Text>
+              <View key={row.label} style={styles.breakdownCard}>
+                <View style={styles.breakdownIconWrap}>
+                  <Ionicons name={row.icon} size={16} color={plot.accent} />
                 </View>
-                <Text style={styles.rowValue}>{row.value}</Text>
+                <Text style={[styles.breakdownLabel, isUrdu && styles.rtlText]}>
+                  {row.label}
+                </Text>
+                <Text style={styles.breakdownValue}>{row.value}</Text>
+                <Text style={styles.breakdownSub}>{row.sub}</Text>
               </View>
             ))}
           </View>
 
-          <View style={[styles.profitBar, { backgroundColor: plot.accent }]}>
-            <View>
+          {/* Total Profit Hero Banner */}
+          <View style={[styles.profitBanner, { borderColor: plot.accent }]}>
+            <View style={styles.profitTextCol}>
               <Text style={[styles.profitLabel, isUrdu && styles.rtlText]}>
                 {t('plotInformation.totalProfit')}
               </Text>
@@ -210,13 +288,23 @@ const PlotInformationScreen = ({ navigation }) => {
                 {t('plotInformation.profitHint')}
               </Text>
             </View>
-            <Text style={styles.profitValue}>{formatNumber(plot.totalProfit)}</Text>
+
+            <View style={styles.profitValueCol}>
+              <Text style={[styles.profitAmount, { color: plot.accent }]}>
+                PKR {formatNumber(plot.totalProfit)}
+              </Text>
+              <Text style={styles.profitSub}>Rent + Appreciation</Text>
+            </View>
           </View>
         </Animated.View>
 
-        <Text style={[styles.disclaimer, isUrdu && styles.rtlText]}>
-          {t('plotInformation.disclaimer')}
-        </Text>
+        {/* Disclaimer */}
+        <View style={styles.disclaimerCard}>
+          <Ionicons name="shield-outline" size={16} color="#8A8A96" />
+          <Text style={[styles.disclaimer, isUrdu && styles.rtlText]}>
+            {t('plotInformation.disclaimer')}
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -224,216 +312,364 @@ const PlotInformationScreen = ({ navigation }) => {
 
 const PlotVisual = ({ accent, soil, grass, badge }) => (
   <View style={styles.visualWrap}>
-    <View style={[styles.plotShadow, { backgroundColor: `${accent}33` }]} />
+    <View style={[styles.plotShadow, { backgroundColor: `${accent}25` }]} />
     <View style={[styles.plotBase, { backgroundColor: soil }]}>
-      <View style={[styles.plotTop, { backgroundColor: grass }]} />
+      <View style={[styles.plotTop, { backgroundColor: grass }]}>
+        <View style={styles.gridLinesRow}>
+          <View style={styles.gridLine} />
+          <View style={styles.gridLine} />
+          <View style={styles.gridLine} />
+        </View>
+      </View>
       <View style={[styles.plotSide, { backgroundColor: soil }]} />
     </View>
-    <View style={[styles.badge, { backgroundColor: accent }]}>
-      <Text style={styles.badgeText}>{badge}</Text>
+    <View style={[styles.visualBadge, { backgroundColor: accent }]}>
+      <Text style={styles.visualBadgeText}>{badge}</Text>
     </View>
   </View>
 );
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0B0B0B' },
-  header: {
-    paddingTop: 52,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: '#111111',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
-  },
-  back: { color: '#D4AF37', fontSize: 15, fontWeight: '700', marginBottom: 10 },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#F5F1E8',
-    letterSpacing: 0.3,
-  },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#9A9A9A',
-    lineHeight: 20,
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  tab: {
+  root: {
     flex: 1,
-    paddingVertical: 11,
-    borderRadius: 999,
+    backgroundColor: '#0A0A0E',
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1A1A22',
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#161620',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#333',
-    backgroundColor: '#151515',
+    borderColor: '#262634',
+  },
+  titleCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  statusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ADE80',
+    marginRight: 6,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.6,
+  },
+  topTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  actionIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#161620',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#262634',
+  },
+
+  /* Selector Tabs */
+  tabsWrap: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  tabChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#262634',
+    backgroundColor: '#141419',
     alignItems: 'center',
   },
-  tabText: {
-    color: '#BDBDBD',
+  tabChipText: {
+    color: '#8A8A96',
     fontSize: 13,
     fontWeight: '700',
   },
-  tabTextActive: {
-    color: '#111',
+  tabChipTextActive: {
+    color: '#0A0A0E',
+    fontWeight: '800',
   },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 36 },
+
+  /* Scrollable Content */
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+  },
   panel: {
-    borderWidth: 1.5,
-    borderRadius: 22,
-    padding: 18,
-    overflow: 'hidden',
+    backgroundColor: '#141419',
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
   },
-  sizeLabel: {
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  planBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  planBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  panelTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  gainBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  gainBadgeText: {
     fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 8,
   },
-  priceLine: {
-    color: '#E8E8E8',
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 24,
-    marginBottom: 18,
-  },
-  rentBlock: {
+
+  /* Rent Spotlight */
+  rentSpotlight: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  rentValue: {
-    fontSize: 48,
-    fontWeight: '900',
-    letterSpacing: 1,
+    backgroundColor: '#0E0E14',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#22222E',
+    marginBottom: 16,
   },
   rentLabel: {
-    marginTop: 2,
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 12,
+    color: '#8A8A96',
+    marginBottom: 2,
   },
+  rentValue: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  rentUnit: {
+    fontSize: 12,
+    color: '#8A8A96',
+    fontWeight: '500',
+  },
+  rentIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* Visual Schematic */
   visualWrap: {
-    height: 150,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 10,
+    marginVertical: 14,
+    height: 110,
+    position: 'relative',
   },
   plotShadow: {
     position: 'absolute',
-    width: 150,
-    height: 28,
-    borderRadius: 80,
-    bottom: 18,
-    transform: [{ scaleX: 1.2 }],
+    bottom: 12,
+    width: 170,
+    height: 50,
+    borderRadius: 30,
+    transform: [{ scaleY: 0.5 }],
   },
   plotBase: {
-    width: 120,
-    height: 78,
-    borderRadius: 10,
-    transform: [{ rotate: '45deg' }, { scaleY: 0.62 }],
+    width: 150,
+    height: 70,
+    borderRadius: 14,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#0A0A0E',
   },
   plotTop: {
-    flex: 1,
-    opacity: 0.95,
+    height: 44,
+    padding: 6,
+    justifyContent: 'space-around',
   },
   plotSide: {
-    height: 18,
+    height: 26,
     opacity: 0.85,
   },
-  badge: {
+  gridLinesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  gridLine: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  visualBadge: {
     position: 'absolute',
-    top: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    transform: [{ rotate: '-8deg' }],
-  },
-  badgeText: {
-    color: '#111',
-    fontWeight: '900',
-    fontSize: 12,
-    letterSpacing: 0.6,
-  },
-  futureNote: {
-    color: '#C8C8C8',
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 16,
-    marginTop: 4,
-  },
-  breakdown: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 16,
+    bottom: 2,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    marginBottom: 14,
+    borderRadius: 10,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingRight: 10,
-  },
-  rowLabel: {
-    color: '#D0D0D0',
-    fontSize: 13,
-    marginLeft: 8,
-    flexShrink: 1,
-  },
-  rowValue: {
-    color: '#FFFFFF',
-    fontSize: 15,
+  visualBadgeText: {
+    color: '#0A0A0E',
+    fontSize: 11,
     fontWeight: '800',
   },
-  profitBar: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+
+  /* Future Note */
+  futureNoteCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    backgroundColor: '#161622',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
+    gap: 10,
+    marginBottom: 16,
+  },
+  futureNoteText: {
+    flex: 1,
+    color: '#C0C0CB',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+
+  /* Breakdown Grid */
+  breakdownGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  breakdownCard: {
+    width: '48.5%',
+    backgroundColor: '#0E0E14',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#20202A',
+  },
+  breakdownIconWrap: {
+    marginBottom: 6,
+  },
+  breakdownLabel: {
+    fontSize: 11,
+    color: '#8A8A96',
+    marginBottom: 2,
+  },
+  breakdownValue: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  breakdownSub: {
+    fontSize: 10,
+    color: '#656572',
+  },
+
+  /* Total Profit Banner */
+  profitBanner: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#181824',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  profitTextCol: {
+    flex: 1,
   },
   profitLabel: {
-    color: '#111',
-    fontSize: 14,
-    fontWeight: '900',
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   profitHint: {
-    color: 'rgba(0,0,0,0.65)',
     fontSize: 11,
+    color: '#8A8A96',
     marginTop: 2,
-    fontWeight: '600',
   },
-  profitValue: {
-    color: '#111',
-    fontSize: 22,
-    fontWeight: '900',
+  profitValueCol: {
+    alignItems: 'flex-end',
+  },
+  profitAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  profitSub: {
+    fontSize: 10,
+    color: '#8A8A96',
+    marginTop: 2,
+  },
+
+  /* Disclaimer */
+  disclaimerCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#141419',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#22222E',
+    gap: 10,
   },
   disclaimer: {
-    marginTop: 16,
-    color: '#777',
+    flex: 1,
     fontSize: 12,
+    color: '#8A8A96',
     lineHeight: 18,
-    textAlign: 'center',
   },
   rtlText: {
-    textAlign: I18nManager.isRTL ? 'right' : 'right',
-    writingDirection: 'rtl',
+    textAlign: 'right',
   },
 });
 

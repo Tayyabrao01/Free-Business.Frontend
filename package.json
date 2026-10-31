@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
-    "postinstall": "node scripts/patch-flat-list-mvcp.js && node scripts/patch-stream-video-kotlin.js && node scripts/patch-react-native-video.js",
+    "postinstall": "node scripts/patch-flat-list-mvcp.js && node scripts/patch-stream-video-kotlin.js && node scripts/patch-react-native-video.js && node scripts/patch-react-native-gradle-plugin.js && node scripts/patch-reanimated.js",
     "android:release": "cd android && gradlew.bat bundleRelease",
     "android:reinstall": "adb uninstall pk.freebusinessik.app & react-native run-android",
     "ota:android:staging": "npx @revopush/code-push-cli release-react FreeBusiness_android android -d Staging",

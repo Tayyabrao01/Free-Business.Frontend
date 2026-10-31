@@ -17,6 +17,7 @@ import { resolveMediaUrl } from '../utils/imageUrl';
 import { getApiErrorMessage } from '../utils/apiError';
 import { COMMISSION_ENABLED } from '../config/features';
 import MediaViewerModal from '../components/MediaViewerModal';
+import ExpandableText from '../components/ExpandableText';
 
 const PropertyDetailScreen = ({ route, navigation }) => {
   const { user } = useAuth();
@@ -133,9 +134,7 @@ const PropertyDetailScreen = ({ route, navigation }) => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('properties.descriptionLabel')}</Text>
-        <Text style={styles.sectionContent}>
-          {property.description || t('properties.descriptionPlaceholder')}
-        </Text>
+        <ExpandableText text={property.description || t('properties.descriptionPlaceholder')} maxLength={180} style={styles.sectionContent} />
       </View>
 
       {isOwner && isAvailable && (

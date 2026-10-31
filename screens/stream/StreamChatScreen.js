@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useHeaderHeight } from '@react-navigation/elements';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Channel,
@@ -20,6 +20,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../../context/AuthContext';
 import { useStream } from '../../context/StreamProvider';
 import { useTranslation } from '../../hooks/useTranslation';
+import Avatar from '../../components/Avatar';
 import {
   loadChatChannel,
   ensureChatClientReady,
@@ -42,9 +43,9 @@ const StreamChatScreen = ({ route, navigation }) => {
   const {
     channelId,
     channelType = 'messaging',
-    otherUserId,
-    otherUserName,
-    otherUserAvatar,
+    otherUserId: otherUserIdParam,
+    otherUserName: otherUserNameParam,
+    otherUserAvatar: otherUserAvatarParam,
     isGroupChat: isGroupChatParam,
     isGroupOwner: isGroupOwnerParam,
     groupId: groupIdParam,
@@ -55,7 +56,7 @@ const StreamChatScreen = ({ route, navigation }) => {
   const { user } = useAuth();
   const { isReady, reconnect, chatClient } = useStream();
   const { t } = useTranslation();
-  const headerHeight = useHeaderHeight();
+
   const [channel, setChannel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -78,6 +79,22 @@ const StreamChatScreen = ({ route, navigation }) => {
     }, [chatClient?.userID])
   );
 
+  const otherMember = useMemo(() => {
+    if (isGroupChat) return null;
+    return getOtherMemberFromChannel(channel, user?._id);
+  }, [channel, isGroupChat, user?._id]);
+
+  const resolvedPeerId = otherUserIdParam || otherMember?.id;
+  const resolvedName = useMemo(() => {
+    if (isGroupChat) {
+      return groupName || channel?.data?.name || t('groups.groupChat');
+    }
+    return otherUserNameParam || otherMember?.name || t('common.user');
+  }, [groupName, channel?.data?.name, isGroupChat, otherUserNameParam, otherMember?.name, t]);
+
+  const resolvedAvatar = otherUserAvatarParam || otherMember?.image;
+  const isPeerOnline = Boolean(otherMember?.online);
+
   const messagePlaceholder = useMemo(() => {
     if (isGroupChat) {
       return t('groups.messagePlaceholder', {
@@ -85,15 +102,15 @@ const StreamChatScreen = ({ route, navigation }) => {
       });
     }
     return t('chat.messagePlaceholder', {
-      name: otherUserName || t('common.user'),
+      name: resolvedName,
     });
-  }, [groupName, isGroupChat, otherUserName, t]);
+  }, [groupName, isGroupChat, resolvedName, t]);
 
   const messageInputProps = useMemo(
     () => ({
       placeholder: messagePlaceholder,
-      placeholderTextColor: '#888888',
-      color: '#D4AF37',
+      placeholderTextColor: '#666675',
+      color: '#FFFFFF',
       multiline: true,
     }),
     [messagePlaceholder]
@@ -101,8 +118,7 @@ const StreamChatScreen = ({ route, navigation }) => {
 
   const startDirectCall = useCallback(
     async (withVideo) => {
-      const peerId =
-        otherUserId || getOtherMemberFromChannel(channel, user._id)?.id;
+      const peerId = resolvedPeerId;
 
       if (!peerId) {
         Alert.alert(t('common.error'), t('stream.cannotCall'));
@@ -117,11 +133,11 @@ const StreamChatScreen = ({ route, navigation }) => {
 
       navigation.navigate('StreamCall', {
         otherUserId: peerId,
-        otherUserName: otherUserName || getOtherMemberFromChannel(channel, user._id)?.name,
+        otherUserName: resolvedName,
         video: withVideo,
       });
     },
-    [channel, navigation, otherUserId, otherUserName, reconnect, t, user]
+    [navigation, resolvedName, resolvedPeerId, reconnect, t, user]
   );
 
   const startGroupCall = useCallback(
@@ -180,12 +196,23 @@ const StreamChatScreen = ({ route, navigation }) => {
     [isGroupChat, startDirectCall, startGroupCall]
   );
 
+  const handleHeaderPress = useCallback(() => {
+    if (isGroupChat) {
+      const resolvedGroupId =
+        groupId || getGroupIdFromChannelId(channel?.id || channelId);
+      if (resolvedGroupId) {
+        navigation.navigate('GroupDetail', { groupId: resolvedGroupId });
+      }
+    } else if (resolvedPeerId) {
+      navigation.navigate('UserProfile', { userId: resolvedPeerId.toString() });
+    }
+  }, [channel?.id, channelId, groupId, isGroupChat, navigation, resolvedPeerId]);
+
   useEffect(() => {
     let cancelled = false;
     const userId = user?._id?.toString();
 
     const run = async () => {
-      // Keep showing the existing channel while reloading the same id (avoids "cleared" flash).
       const sameChannel =
         channelRef.current?.id &&
         channelId &&
@@ -209,8 +236,8 @@ const StreamChatScreen = ({ route, navigation }) => {
         if (cancelled) return;
 
         const activeChannel = await loadChatChannel(client, user, reconnect, {
-          otherUserId,
-          otherUserName,
+          otherUserId: otherUserIdParam,
+          otherUserName: otherUserNameParam,
           groupId: groupIdParam,
           channelId,
           channelType,
@@ -239,13 +266,6 @@ const StreamChatScreen = ({ route, navigation }) => {
         setChannel(activeChannel);
         channelRef.current = activeChannel;
         setActiveChatChannelId(activeChannel.id);
-        navigation.setOptions({
-          title: channelIsGroup
-            ? groupNameParam || activeChannel?.data?.name || t('groups.groupChat')
-            : otherUserName ||
-              getOtherMemberFromChannel(activeChannel, user._id)?.name ||
-              t('chat.chatTitle'),
-        });
       } catch (error) {
         console.error('Channel load error:', error);
         if (!cancelled) {
@@ -278,31 +298,17 @@ const StreamChatScreen = ({ route, navigation }) => {
     user?._id,
     channelId,
     channelType,
-    otherUserId,
+    otherUserIdParam,
     groupIdParam,
-    otherUserName,
+    otherUserNameParam,
     isGroupChatParam,
     reloadKey,
   ]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => startCall(false)}>
-            <Ionicons name="call-outline" size={22} color="#D4AF37" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => startCall(true)}>
-            <Ionicons name="videocam-outline" size={24} color="#D4AF37" />
-          </TouchableOpacity>
-        </View>
-      ),
-    });
-  }, [navigation, startCall]);
-
   if (loading) {
     return (
       <View style={styles.center}>
+        <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
         <ActivityIndicator size="large" color="#D4AF37" />
         <Text style={styles.hint}>{t('stream.connecting')}</Text>
       </View>
@@ -312,8 +318,14 @@ const StreamChatScreen = ({ route, navigation }) => {
   if (loadError || !channel) {
     return (
       <View style={styles.center}>
+        <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
+        <Ionicons name="chatbubble-ellipses-outline" size={48} color="#D4AF37" />
         <Text style={styles.errorText}>{loadError || t('stream.chatLoadFailed')}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={() => setReloadKey((k) => k + 1)}>
+        <TouchableOpacity
+          style={styles.retryBtn}
+          onPress={() => setReloadKey((k) => k + 1)}
+          activeOpacity={0.85}
+        >
           <Text style={styles.retryText}>{t('stream.retry')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
@@ -323,19 +335,97 @@ const StreamChatScreen = ({ route, navigation }) => {
     );
   }
 
+  const groupInitial = (resolvedName || 'G').trim().charAt(0).toUpperCase() || 'G';
+
   return (
     <StreamChatRoot>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        {isGroupChat ? (
-          <View style={styles.groupBanner}>
-            <Ionicons name="people" size={18} color="#D4AF37" />
-            <Text style={styles.groupBannerText} numberOfLines={2}>
-              {isGroupOwner
-                ? t('groups.adminChatHint')
-                : groupName || t('groups.groupChat')}
-            </Text>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
+
+        {/* Custom Luxury Chat Header Bar */}
+        <View style={styles.chatHeader}>
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.navBackBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {/* User/Group Info & Profile shortcut */}
+          <TouchableOpacity
+            style={styles.headerInfoCol}
+            onPress={handleHeaderPress}
+            activeOpacity={0.8}
+          >
+            <View style={styles.headerAvatarWrap}>
+              {isGroupChat ? (
+                <View style={styles.headerGroupAvatar}>
+                  <Text style={styles.headerGroupInitial}>{groupInitial}</Text>
+                </View>
+              ) : (
+                <View style={styles.headerUserAvatar}>
+                  <Avatar uri={resolvedAvatar} name={resolvedName} size={38} />
+                  {isPeerOnline ? <View style={styles.headerOnlineDot} /> : null}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.headerMeta}>
+              <View style={styles.headerTitleRow}>
+                <Text style={styles.headerTitleName} numberOfLines={1}>
+                  {resolvedName}
+                </Text>
+                <Ionicons
+                  name={isGroupChat ? 'people' : 'shield-checkmark'}
+                  size={13}
+                  color="#D4AF37"
+                  style={{ marginLeft: 5 }}
+                />
+              </View>
+
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {isGroupChat
+                  ? `${channel?.data?.member_count || 1} members · Tap for info`
+                  : isPeerOnline
+                    ? 'Online'
+                    : 'Tap to view profile'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Quick Audio & Video Call Actions */}
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.callActionButton}
+              onPress={() => startCall(false)}
+              activeOpacity={0.75}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            >
+              <Ionicons name="call" size={17} color="#D4AF37" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.callActionButton}
+              onPress={() => startCall(true)}
+              activeOpacity={0.75}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            >
+              <Ionicons name="videocam" size={18} color="#D4AF37" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Group Admin Advisory Banner */}
+        {isGroupChat && isGroupOwner ? (
+          <View style={styles.groupAdminBanner}>
+            <Ionicons name="shield-checkmark" size={14} color="#D4AF37" />
+            <Text style={styles.groupAdminBannerText}>{t('groups.adminChatHint')}</Text>
           </View>
         ) : null}
+
+        {/* Stream Chat Message View */}
         <View style={styles.channelWrap}>
           <Channel
             channel={channel}
@@ -344,7 +434,7 @@ const StreamChatScreen = ({ route, navigation }) => {
             hasImagePicker
             audioRecordingEnabled
             asyncMessagesMultiSendEnabled
-            keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
           >
             <MessageList />
             <MessageInput
@@ -363,45 +453,168 @@ const StreamChatScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-  channelWrap: { flex: 1 },
-  groupBanner: {
+  container: {
+    flex: 1,
+    backgroundColor: '#0A0A0E',
+  },
+  channelWrap: {
+    flex: 1,
+    backgroundColor: '#0A0A0E',
+  },
+
+  /* Custom Chat Header */
+  chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#0A0A0E',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#1a1a1a',
+    paddingTop: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#333333',
+    borderBottomColor: '#1A1A24',
   },
-  groupBannerText: {
-    color: '#D4AF37',
-    fontSize: 13,
-    marginLeft: 8,
+  navBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#161620',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#262634',
+    marginRight: 10,
+  },
+  headerInfoCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    fontWeight: '600',
   },
+  headerAvatarWrap: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  headerUserAvatar: {
+    position: 'relative',
+  },
+  headerOnlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: '#0A0A0E',
+  },
+  headerGroupAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: '#1C1C28',
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerGroupInitial: {
+    color: '#D4AF37',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  headerMeta: {
+    flex: 1,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitleName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  headerSubtitle: {
+    color: '#8A8A96',
+    fontSize: 11.5,
+    marginTop: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 8,
+  },
+  callActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#161622',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* Admin Advisory Banner */
+  groupAdminBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141419',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: '#20202C',
+    gap: 8,
+  },
+  groupAdminBannerText: {
+    color: '#D4AF37',
+    fontSize: 11.5,
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  /* Loader & Error States */
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: '#0A0A0E',
     padding: 24,
   },
-  hint: { color: '#888888', marginTop: 12 },
-  errorText: { color: '#D4AF37', textAlign: 'center', marginBottom: 16, lineHeight: 22 },
+  hint: {
+    color: '#8A8A96',
+    marginTop: 12,
+    fontSize: 13,
+  },
+  errorText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+    fontSize: 14,
+    lineHeight: 20,
+  },
   retryBtn: {
     backgroundColor: '#D4AF37',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 10,
     marginBottom: 12,
   },
-  retryText: { color: '#000000', fontWeight: '700' },
-  backBtn: { padding: 12 },
-  backText: { color: '#888888' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
-  iconBtn: { padding: 8, marginLeft: 4 },
+  retryText: {
+    color: '#0A0A0E',
+    fontWeight: '700',
+    fontSize: 13.5,
+  },
+  backBtn: {
+    padding: 8,
+  },
+  backText: {
+    color: '#8A8A96',
+    fontSize: 13,
+  },
 });
 
 export default StreamChatScreen;

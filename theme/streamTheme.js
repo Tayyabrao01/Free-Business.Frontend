@@ -1,68 +1,80 @@
 const gold = '#D4AF37';
-const black = '#000000';
-const darkCard = '#1a1a1a';
+const bgDark = '#0A0A0E';
+const surfaceDark = '#141419';
+const borderDark = '#22222E';
+const textWhite = '#FFFFFF';
+const textMuted = '#8A8A96';
 
 export const streamTheme = {
   dark: {
     colors: {
       accent_blue: gold,
-      accent_green: gold,
-      accent_red: '#e74c3c',
-      bg_gradient_end: black,
-      bg_gradient_start: black,
-      black,
-      blue_alice: darkCard,
-      border: '#333333',
-      grey: '#888888',
-      grey_dark: '#666666',
-      grey_gainsboro: '#444444',
-      grey_whisper: '#333333',
-      icon_background: darkCard,
-      light_gray: darkCard,
-      light_grey: '#cccccc',
+      accent_green: '#10B981',
+      accent_red: '#FF6B6B',
+      bg_gradient_end: bgDark,
+      bg_gradient_start: bgDark,
+      black: bgDark,
+      blue_alice: surfaceDark,
+      border: borderDark,
+      grey: textMuted,
+      grey_dark: '#5C5C6A',
+      grey_gainsboro: '#252532',
+      grey_whisper: '#1A1A24',
+      icon_background: '#191924',
+      light_gray: surfaceDark,
+      light_grey: '#D0D0DC',
       modal_shadow: '#000000',
       overlay: '#000000CC',
       shadow_icon: '#000000',
-      targetedMessageBackground: '#2a2a1a',
+      targetedMessageBackground: 'rgba(212, 175, 55, 0.12)',
       transparent: 'transparent',
-      white: gold,
-      white_smoke: darkCard,
-      white_snow: black,
+      white: textWhite,
+      static_white: textWhite,
+      static_black: bgDark,
+      white_smoke: surfaceDark,
+      white_snow: bgDark,
     },
     messageInput: {
       container: {
-        backgroundColor: darkCard,
-        borderTopColor: gold,
+        backgroundColor: bgDark,
+        borderTopColor: '#1A1A24',
         borderTopWidth: 1,
-        paddingBottom: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
       },
       inputBoxContainer: {
-        backgroundColor: black,
-        borderColor: gold,
+        backgroundColor: surfaceDark,
+        borderColor: '#262634',
+        borderWidth: 1,
+        borderRadius: 22,
+        paddingHorizontal: 12,
       },
       focusedInputBoxContainer: {
         borderColor: gold,
       },
       inputBox: {
-        color: gold,
+        color: textWhite,
+        fontSize: 14.5,
       },
       sendButtonIcon: {
         color: gold,
       },
-      attachButtonContainer: {},
-      composerContainer: {},
+      attachButtonContainer: {
+        paddingRight: 4,
+      },
     },
     messageList: {
       container: {
-        backgroundColor: black,
+        backgroundColor: bgDark,
       },
     },
     channelListMessenger: {
       flatList: {
-        backgroundColor: black,
+        backgroundColor: bgDark,
       },
       flatListContent: {
-        backgroundColor: black,
+        backgroundColor: bgDark,
+        paddingBottom: 24,
       },
     },
   },
