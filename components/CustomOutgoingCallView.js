@@ -1,11 +1,29 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getStreamCallUi } from '../services/streamVideoOptional';
+import { playRingbackTone, stopRingbackTone } from '../utils/RingbackService'; // ✅ ADDED IMPORT
 
 const CustomOutgoingCallView = ({ calleeName = 'User', isGroupCall = false, onCancel }) => {
   const callUi = getStreamCallUi();
   const UserInfo = callUi?.UserInfo;
+
+  // ✅ PLAY RINGBACK TONE WHEN THIS SCREEN MOUNTS
+  useEffect(() => {
+    playRingbackTone();
+
+    // ✅ STOP RINGBACK TONE IF THE CALL IS ANSWERED (Screen unmounts) OR CANCELLED
+    return () => {
+      stopRingbackTone();
+    };
+  }, []);
+
+  const handleCancel = () => {
+    stopRingbackTone(); // ✅ Stop immediately on cancel
+    if (onCancel) {
+      onCancel();
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -19,7 +37,7 @@ const CustomOutgoingCallView = ({ calleeName = 'User', isGroupCall = false, onCa
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.85}>
           <Ionicons name="call" size={28} color="#fff" style={styles.hangupIcon} />
           <Text style={styles.actionLabel}>Cancel</Text>
         </TouchableOpacity>

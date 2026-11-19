@@ -38,6 +38,9 @@ const getPeerFromCall = (call, currentUserId) => {
 
 const resolveVideoEnabled = (call) => {
   const custom = call?.state?.custom || {};
+  if (custom.callType === 'audio' || custom.callType === 'video') {
+    return custom.callType === 'video';
+  }
   if (typeof custom.videoEnabled === 'boolean') {
     return custom.videoEnabled;
   }
@@ -73,6 +76,7 @@ const buildIncomingParams = (call, userId) => {
     otherUserName: isGroupCall ? groupName || 'Group' : peer.name,
     otherUserAvatar: peer.avatar,
     video,
+    callType: video ? 'video' : 'audio',
   };
 };
 
@@ -150,6 +154,7 @@ const StreamRingingWatcher = () => {
           isGroupCall: params.isGroupCall,
           callCid: cid,
           video: params.video,
+          callType: params.callType,
           otherUserId: params.otherUserId,
           groupId: params.groupId,
           groupName: params.groupName,

@@ -46,6 +46,10 @@ import MoreScreen from '../screens/MoreScreen';
 import PlotInformationScreen from '../screens/PlotInformationScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
+import JobsScreen from '../screens/JobsScreen';
+import PostJobScreen from '../screens/PostJobScreen';
+import JobDetailScreen from '../screens/JobDetailScreen';
+import MyJobsScreen from '../screens/MyJobsScreen';
 
 const SafeStreamCallScreen = (props) => (
   <CallErrorBoundary navigation={props.navigation}>
@@ -78,6 +82,7 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
+      backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ color, focused }) => (
@@ -235,6 +240,10 @@ export default function AppNavigator() {
           />
           <Stack.Screen name="PropertyDetail" component={PropertyDetailScreen} />
           <Stack.Screen name="AddProperty" component={AddPropertyScreen} />
+          <Stack.Screen name="Jobs" component={JobsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="PostJob" component={PostJobScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="MyJobs" component={MyJobsScreen} options={{ headerShown: false }} />
           <Stack.Screen name="AddPost" component={AddPostScreen} />
           <Stack.Screen name="RewardHistory" component={RewardHistoryScreen} />
           <Stack.Screen name="Referral" component={ReferralScreen} />

@@ -66,6 +66,50 @@ const StreamMessagesScreen = ({ navigation }) => {
 
   const sort = useMemo(() => ({ last_message_at: -1 }), []);
 
+  const handleChannelPress = useCallback(
+    channel => {
+      if (!channel?.id || openingChat.current) {
+        return;
+      }
+
+      console.log('[Messages] Opening channel', channel.id);
+      openingChat.current = true;
+      const channelIsGroup = isGroupChannelId(channel.id);
+      const other = getOtherMemberFromChannel(channel, user._id);
+      const rootNavigation = getRootNavigation(navigation);
+
+      if (channelIsGroup) {
+        rootNavigation.navigate('Chat', {
+          channelId: channel.id,
+          channelType: channel.type || 'messaging',
+          isGroupChat: true,
+          groupId: getGroupIdFromChannelId(channel.id),
+          groupName: channel.data?.name || t('groups.groupChat'),
+        });
+      } else {
+        rootNavigation.navigate('Chat', {
+          channelId: channel.id,
+          channelType: channel.type || 'messaging',
+          otherUserId: other?.id,
+          otherUserName: other?.name || channel.data?.name,
+          otherUserAvatar: other?.image,
+        });
+      }
+
+      setTimeout(() => {
+        openingChat.current = false;
+      }, 600);
+    },
+    [navigation, t, user._id]
+  );
+
+  const renderChannelPreview = useCallback(
+    previewProps => (
+      <StreamChannelPreview {...previewProps} onSelect={handleChannelPress} />
+    ),
+    [handleChannelPress]
+  );
+
   // Filter channels based on Search Query and Active Filter tab
   const channelRenderFilterFn = useCallback(
     (channels) => {
@@ -191,35 +235,7 @@ const StreamMessagesScreen = ({ navigation }) => {
             sort={sort}
             options={{ state: true, presence: true }}
             channelRenderFilterFn={channelRenderFilterFn}
-            Preview={StreamChannelPreview}
-            onSelect={(channel) => {
-              if (openingChat.current) {
-                return;
-              }
-              openingChat.current = true;
-              const channelIsGroup = isGroupChannelId(channel.id);
-              const other = getOtherMemberFromChannel(channel, user._id);
-              if (channelIsGroup) {
-                getRootNavigation(navigation).navigate('Chat', {
-                  channelId: channel.id,
-                  channelType: channel.type || 'messaging',
-                  isGroupChat: true,
-                  groupId: getGroupIdFromChannelId(channel.id),
-                  groupName: channel.data?.name || t('groups.groupChat'),
-                });
-              } else {
-                getRootNavigation(navigation).navigate('Chat', {
-                  channelId: channel.id,
-                  channelType: channel.type || 'messaging',
-                  otherUserId: other?.id,
-                  otherUserName: other?.name || channel.data?.name,
-                  otherUserAvatar: other?.image,
-                });
-              }
-              setTimeout(() => {
-                openingChat.current = false;
-              }, 600);
-            }}
+            Preview={renderChannelPreview}
             EmptyStateIndicator={() => (
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconWrap}>

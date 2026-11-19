@@ -1,0 +1,1 @@
+C:\Users\tayya\OneDrive\Desktop\Free Business\frontendApp\node_modules\react-native-screens\android\build\intermediates\cxx\RelWithDebInfo\13y344bf\obj\arm64-v8a

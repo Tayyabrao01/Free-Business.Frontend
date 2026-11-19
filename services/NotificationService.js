@@ -66,6 +66,7 @@ const openFromNotificationData = (data = {}) => {
       groupId: data.groupId,
       groupName: data.groupName || 'Group',
       video: data.video !== 'false' && data.video !== false,
+      callType: data.callType || data.call_type,
     });
     return true;
   }

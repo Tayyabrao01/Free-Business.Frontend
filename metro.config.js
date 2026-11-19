@@ -6,6 +6,11 @@ const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
  *
  * @type {import('@react-native/metro-config').MetroConfig}
  */
-const config = {};
+const config = {
+  resolver: {
+    // ✅ This is the correct option to disable Watchman
+    useWatchman: false,
+  },
+};
 
 module.exports = mergeConfig(getDefaultConfig(__dirname), config);

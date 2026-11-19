@@ -1,28 +1,76 @@
-import React from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { formatPkLocalDigits } from '../utils/pakistanPhone';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+} from 'react-native';
+import CountryPicker from 'react-native-country-picker-modal';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
-/**
- * Fixed +92 prefix; user types mobile digits starting with 3 (e.g. 3001234567).
- */
+const PAKISTAN = {
+  cca2: 'PK',
+  callingCode: ['92'],
+  name: 'Pakistan',
+};
+
+export const getCountryPhoneNumber = (value, countryCode = 'PK') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('+')) {
+    return parsePhoneNumberFromString(raw)?.number || '';
+  }
+  return parsePhoneNumberFromString(raw, countryCode)?.number || '';
+};
+
+export const isValidCountryPhone = (value, countryCode = 'PK') => {
+  const phone = getCountryPhoneNumber(value, countryCode);
+  return Boolean(phone && parsePhoneNumberFromString(phone)?.isValid());
+};
+
 const PakistanPhoneInput = ({
   value,
   onChangeValue,
+  onChangeCountry,
+  country = PAKISTAN,
   placeholder = '3001234567',
   placeholderTextColor = '#888',
   style,
   inputStyle,
   testID,
 }) => {
-  const handleChange = (text) => {
-    onChangeValue(formatPkLocalDigits(text));
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const selectedCountry = country || PAKISTAN;
+  const callingCode = selectedCountry.callingCode?.[0] || '92';
+
+  const handleChange = text => {
+    onChangeValue(text.replace(/[^\d]/g, ''));
+  };
+
+  const handleCountrySelect = nextCountry => {
+    setPickerVisible(false);
+    onChangeCountry?.(nextCountry);
   };
 
   return (
     <View style={[styles.row, style]}>
-      <View style={styles.prefixBox}>
-        <Text style={styles.prefixText}>+92</Text>
-      </View>
+      <TouchableOpacity
+        style={styles.prefixBox}
+        onPress={() => setPickerVisible(true)}
+        activeOpacity={0.8}
+      >
+        <CountryPicker
+          countryCode={selectedCountry.cca2}
+          withFilter
+          withFlag
+          withCallingCode={false}
+          visible={pickerVisible}
+          onSelect={handleCountrySelect}
+          onClose={() => setPickerVisible(false)}
+        />
+        <Text style={styles.prefixText}>+{callingCode}</Text>
+      </TouchableOpacity>
       <TextInput
         testID={testID}
         style={[styles.input, inputStyle]}
@@ -31,7 +79,6 @@ const PakistanPhoneInput = ({
         value={value}
         onChangeText={handleChange}
         keyboardType="phone-pad"
-        maxLength={10}
         autoComplete="tel"
       />
     </View>
@@ -45,6 +92,8 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   prefixBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#D4AF37',
     borderRightWidth: 0,
@@ -58,6 +107,7 @@ const styles = StyleSheet.create({
     color: '#D4AF37',
     fontSize: 16,
     fontWeight: '700',
+    marginLeft: 6,
   },
   input: {
     flex: 1,

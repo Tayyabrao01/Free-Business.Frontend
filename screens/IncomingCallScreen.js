@@ -9,8 +9,10 @@ import {
   Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useCall } from '@stream-io/video-react-bindings';
-import { startIncomingRingtone, stopIncomingRingtone } from '../utils/incomingRingtone';
+import {
+  startIncomingRingtone,
+  stopIncomingRingtone,
+} from '../utils/incomingRingtone';
 import { cancelIncomingCallNotification } from '../services/NotificationService';
 
 /**
@@ -23,12 +25,11 @@ const IncomingCallScreen = ({
   videoEnabled = true,
   onAccept,
   onDecline,
+  callKey = 'incoming',
 }) => {
-  const call = useCall();
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const callKey = call?.cid || call?.id || 'incoming';
     startIncomingRingtone(callKey);
     const pattern = [0, 1000, 800, 1000, 800];
     Vibration.vibrate(pattern, true);
@@ -45,7 +46,7 @@ const IncomingCallScreen = ({
           duration: 700,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     loop.start();
 
@@ -53,20 +54,13 @@ const IncomingCallScreen = ({
       loop.stop();
       Vibration.cancel();
     };
-  }, [call?.cid, call?.id, pulse]);
+  }, [callKey, pulse]);
 
   const accept = async () => {
     Vibration.cancel();
     stopIncomingRingtone();
     await cancelIncomingCallNotification();
-    try {
-      if (typeof call?.join === 'function') {
-        await call.join();
-      }
-      onAccept?.();
-    } catch (error) {
-      console.warn('accept call:', error?.message);
-    }
+    onAccept?.();
   };
 
   const decline = async () => {
@@ -81,7 +75,9 @@ const IncomingCallScreen = ({
   return (
     <View style={styles.screen}>
       <View style={styles.center}>
-        <Animated.View style={[styles.avatarRing, { transform: [{ scale: pulse }] }]}>
+        <Animated.View
+          style={[styles.avatarRing, { transform: [{ scale: pulse }] }]}
+        >
           {callerAvatar ? (
             <Image source={{ uri: callerAvatar }} style={styles.avatar} />
           ) : (
@@ -95,8 +91,8 @@ const IncomingCallScreen = ({
           {isGroupCall
             ? 'Incoming group call'
             : videoEnabled
-              ? 'Incoming video call'
-              : 'Incoming voice call'}
+            ? 'Incoming video call'
+            : 'Incoming voice call'}
         </Text>
         <Text style={styles.subtitle}>{callerName}</Text>
         <Text style={styles.hint}>Ringing…</Text>
@@ -104,15 +100,27 @@ const IncomingCallScreen = ({
 
       <View style={styles.actions}>
         <View style={styles.actionItem}>
-          <TouchableOpacity style={styles.declineBtn} onPress={decline} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.declineBtn}
+            onPress={decline}
+            activeOpacity={0.85}
+          >
             <Ionicons name="close" size={32} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.actionLabel}>Decline</Text>
         </View>
 
         <View style={styles.actionItem}>
-          <TouchableOpacity style={styles.acceptBtn} onPress={accept} activeOpacity={0.85}>
-            <Ionicons name={videoEnabled ? 'videocam' : 'call'} size={30} color="#fff" />
+          <TouchableOpacity
+            style={styles.acceptBtn}
+            onPress={accept}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name={videoEnabled ? 'videocam' : 'call'}
+              size={30}
+              color="#fff"
+            />
           </TouchableOpacity>
           <Text style={styles.actionLabel}>Accept</Text>
         </View>

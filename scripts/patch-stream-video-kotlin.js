@@ -37,3 +37,21 @@ if (source.includes(broken)) {
   fs.writeFileSync(target, source, 'utf8');
   console.log('Patched Stream Video Kotlin thermal-status casts');
 }
+
+const buildGradleTarget = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  '@stream-io',
+  'video-react-native-sdk',
+  'android',
+  'build.gradle'
+);
+if (fs.existsSync(buildGradleTarget)) {
+  let bg = fs.readFileSync(buildGradleTarget, 'utf8');
+  if (bg.includes('libyuv-android:0.34.0')) {
+    bg = bg.replace('libyuv-android:0.34.0', 'libyuv-android:0.37.0');
+    fs.writeFileSync(buildGradleTarget, bg, 'utf8');
+    console.log('Patched Stream Video libyuv-android to 0.37.0 for 16 KB page-size support');
+  }
+}

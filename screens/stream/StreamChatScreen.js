@@ -13,8 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Channel,
+  Message as StreamMessage,
   MessageList,
   MessageInput,
+  useMessageContext,
 } from 'stream-chat-react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../../context/AuthContext';
@@ -37,7 +39,63 @@ import { isStreamVideoAvailable } from '../../services/streamVideoOptional';
 import { formatDisplayError } from '../../utils/apiError';
 import { mapStreamChatError } from '../../utils/streamChatErrors';
 import ChatGalleryAttachButton from '../../components/ChatGalleryAttachButton';
+import ChatCameraButton from '../../components/ChatCameraButton';
+import { InputButtons, messageActions as streamMessageActions } from 'stream-chat-react-native';
 import { setActiveChatChannelId } from '../../services/chatNotificationListener';
+
+const senderOnlyMessageActions = params =>
+  streamMessageActions(params).filter(
+    action =>
+      action.actionType !== 'editMessage' &&
+      action.actionType !== 'deleteMessage',
+  );
+
+const OwnerMessage = props => {
+  const {
+    isMyMessage,
+    handleEditMessage,
+    handleDeleteMessage,
+  } = useMessageContext();
+
+  return (
+    <View style={styles.messageWithMenu}>
+      <StreamMessage {...props} />
+      {isMyMessage ? (
+        <TouchableOpacity
+          style={styles.messageMenuButton}
+          onPress={() => {
+            Alert.alert('Message options', undefined, [
+              { text: 'Edit', onPress: handleEditMessage },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  Alert.alert(
+                    'Delete message',
+                    'Are you sure you want to delete this message?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: handleDeleteMessage,
+                      },
+                    ],
+                  );
+                },
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Message options"
+        >
+          <Ionicons name="ellipsis-horizontal" size={18} color="#8A8A96" />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+};
 
 const StreamChatScreen = ({ route, navigation }) => {
   const {
@@ -51,6 +109,7 @@ const StreamChatScreen = ({ route, navigation }) => {
     groupId: groupIdParam,
     groupName: groupNameParam,
     groupMemberIds = [],
+    initialMessage,
   } = route.params || {};
 
   const { user } = useAuth();
@@ -67,6 +126,16 @@ const StreamChatScreen = ({ route, navigation }) => {
   const [reloadKey, setReloadKey] = useState(0);
 
   const channelRef = useRef(null);
+  const initialMessageSentRef = useRef(false);
+
+  useEffect(() => {
+    if (!channel || !initialMessage || initialMessageSentRef.current) return;
+    initialMessageSentRef.current = true;
+    channel.sendMessage({ text: initialMessage }).catch(error => {
+      initialMessageSentRef.current = false;
+      console.warn('Initial chat message failed:', error?.message);
+    });
+  }, [channel, initialMessage]);
 
   useFocusEffect(
     useCallback(() => {
@@ -110,7 +179,7 @@ const StreamChatScreen = ({ route, navigation }) => {
     () => ({
       placeholder: messagePlaceholder,
       placeholderTextColor: '#666675',
-      color: '#FFFFFF',
+      color: '#000000',
       multiline: true,
     }),
     [messagePlaceholder]
@@ -429,6 +498,8 @@ const StreamChatScreen = ({ route, navigation }) => {
         <View style={styles.channelWrap}>
           <Channel
             channel={channel}
+            messageActions={senderOnlyMessageActions}
+            Message={OwnerMessage}
             hasCameraPicker
             hasFilePicker
             hasImagePicker
@@ -443,6 +514,12 @@ const StreamChatScreen = ({ route, navigation }) => {
               hasCameraPicker
               audioRecordingEnabled
               AttachButton={ChatGalleryAttachButton}
+              InputButtons={() => (
+                <View style={styles.inputButtonsRow}>
+                  <InputButtons />
+                  <ChatCameraButton />
+                </View>
+              )}
               additionalTextInputProps={messageInputProps}
             />
           </Channel>
@@ -460,6 +537,20 @@ const styles = StyleSheet.create({
   channelWrap: {
     flex: 1,
     backgroundColor: '#0A0A0E',
+  },
+  inputButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  messageWithMenu: {
+    position: 'relative',
+  },
+  messageMenuButton: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    zIndex: 2,
+    padding: 3,
   },
 
   /* Custom Chat Header */

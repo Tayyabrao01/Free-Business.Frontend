@@ -7,7 +7,7 @@ const UPLOADABLE_URI = /^file:\/\//i;
 /**
  * Copy content:// or bare paths to a cache file React Native can upload.
  */
-const normalizeUriForUpload = async (uri) => {
+const normalizeUriForUpload = async uri => {
   if (!uri) {
     throw new Error('Invalid image');
   }
@@ -30,7 +30,7 @@ const normalizeUriForUpload = async (uri) => {
   return uri;
 };
 
-const toFormDataUri = (uri) => {
+const toFormDataUri = uri => {
   if (Platform.OS === 'ios') {
     return uri.replace(/^file:\/\//i, '');
   }
@@ -43,12 +43,24 @@ const toFormDataUri = (uri) => {
 /**
  * Resize and normalize an image picker asset for multipart upload.
  */
-export const prepareImageForUpload = async (asset) => {
+export const prepareImageForUpload = async asset => {
   if (!asset?.uri) {
-    throw new Error('Invalid image');
+    throw new Error('Invalid media file');
   }
 
-  let uploadUri = await normalizeUriForUpload(asset.uri);
+  let uploadUri = await normalizeUriForUpload(asset.fileCopyUri || asset.uri);
+  const mimeType = asset.type || 'image/jpeg';
+
+  if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) {
+    if (!UPLOADABLE_URI.test(uploadUri) && Platform.OS === 'android') {
+      throw new Error('Video must be saved as a file before upload.');
+    }
+    return {
+      uri: toFormDataUri(uploadUri),
+      type: mimeType,
+      name: asset.fileName || `upload-${Date.now()}${mimeType.startsWith('audio/') ? '.m4a' : '.mp4'}`,
+    };
+  }
 
   try {
     const resized = await ImageResizer.createResizedImage(
@@ -60,7 +72,7 @@ export const prepareImageForUpload = async (asset) => {
       0,
       undefined,
       false,
-      { mode: 'contain', onlyScaleDown: true }
+      { mode: 'contain', onlyScaleDown: true },
     );
     uploadUri = await normalizeUriForUpload(resized.uri);
   } catch (error) {
@@ -79,7 +91,7 @@ export const prepareImageForUpload = async (asset) => {
 
   return {
     uri: toFormDataUri(uploadUri),
-    type: 'image/jpeg',
+    type: mimeType,
     name,
   };
 };

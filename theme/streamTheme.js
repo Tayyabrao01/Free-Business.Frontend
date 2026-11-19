@@ -53,7 +53,7 @@ export const streamTheme = {
         borderColor: gold,
       },
       inputBox: {
-        color: textWhite,
+        color: '#000000',
         fontSize: 14.5,
       },
       sendButtonIcon: {
@@ -66,6 +66,15 @@ export const streamTheme = {
     messageList: {
       container: {
         backgroundColor: bgDark,
+      },
+    },
+    messageSimple: {
+      content: {
+        markdown: {
+          text: {
+            color: '#000000',
+          },
+        },
       },
     },
     channelListMessenger: {

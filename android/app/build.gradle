@@ -6,6 +6,12 @@ apply plugin: "org.jetbrains.kotlin.android"
 react {
     reactNativeDir = file("../../node_modules/react-native")
     codegenDir = file("../../node_modules/@react-native/codegen")
+    autolinkLibrariesWithApp()
+    
+    // ✅ This is the correct React Native 0.78+ way to skip the crashing Metro task.
+    // It tells Gradle to treat the release build like a debug variant for bundling,
+    // forcing it to use the manually created index.android.bundle.
+    debuggableVariants = ["release"]
 }
 
 android {
@@ -28,7 +34,7 @@ android {
         applicationId "pk.freebusinessik.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 30
+        versionCode 35
         versionName "1.7.3"
     }
 
@@ -52,15 +58,17 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
-            // Revopush Staging — safe for internal/dev Release-like tests
             resValue "string", "CodePushDeploymentKey", "Of6KOCSdCIcqvc5U83NA5a1KZu3BVy6RKZ8QNx"
         }
         release {
             signingConfig signingConfigs.release
-            minifyEnabled true
+            
+            // Keep these false to prevent ProGuard from stripping native libraries and causing instant crashes
+            minifyEnabled false
             shrinkResources false
+            crunchPngs false 
+            
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Revopush Production — Play Store / production APKs
             resValue "string", "CodePushDeploymentKey", "DkGQISjhDL-VTNpLubx1rFvGYnMDVy6RKZ8QNx"
         }
     }
@@ -68,18 +76,16 @@ android {
     packagingOptions {
         pickFirst '**/libc++_shared.so'
         pickFirst '**/libjsc.so'
+        
+        // Required for 16 KB page size support
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 
     lint {
         abortOnError false
     }
-    project.ext.react = [
-    enableHermes: true,
-    bundleInRelease: true,
-    devDisabledInRelease: true,
-    entryFile: "index.js",
-    extraPackagerArgs: []
-]
 }
 
 // Fail early if release keystore is missing when building bundleRelease
@@ -113,11 +119,10 @@ dependencies {
 }
 
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
 
 if (file("google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }
 
-// CodePush OTA (Microsoft client → Revopush server). RN 0.72 cannot use @revopush SDK 2.x.
+// CodePush OTA (Microsoft client → Revopush server)
 apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"

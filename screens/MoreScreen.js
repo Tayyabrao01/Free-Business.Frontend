@@ -61,6 +61,22 @@ const MoreScreen = ({ navigation }) => {
         screen: 'AddProperty',
       },
       {
+        id: 'jobs',
+        title: t('jobs.browseJobs'),
+        subtitle: t('jobs.browseSubtitle'),
+        image: HUB_IMAGES.properties,
+        badge: t('jobs.badge'),
+        screen: 'Jobs',
+      },
+      {
+        id: 'postJob',
+        title: t('jobs.postJob'),
+        subtitle: t('jobs.postSubtitle'),
+        image: HUB_IMAGES.addProperty,
+        badge: t('jobs.badge'),
+        screen: 'PostJob',
+      },
+      {
         id: 'privacyPolicy',
         title: t('more.privacyPolicy') || 'Privacy Policy',
         subtitle: 'Official data protection, security terms & user rights',
