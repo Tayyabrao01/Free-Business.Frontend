@@ -1,4 +1,5 @@
 import { isValidPkLocalPhone, toE164FromLocal } from '../utils/pakistanPhone';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 const getAuth = () => {
   try {
@@ -14,17 +15,20 @@ const getAuth = () => {
 
 const firebaseNotReadyError = () =>
   new Error(
-    'Firebase is not set up on this build. Add google-services.json for pk.freebusinessik.app, rebuild, and reinstall. See FIREBASE_OTP_SETUP.md'
+    'Firebase is not set up on this build. Add google-services.json for pk.freebusinessik.app, rebuild, and reinstall. See FIREBASE_OTP_SETUP.md',
   );
 
 /**
  * Maps Firebase Auth errors to short, actionable messages for users.
  */
-export const mapFirebaseOtpError = (error) => {
+export const mapFirebaseOtpError = error => {
   const code = error?.code || '';
   const message = String(error?.message || '');
 
-  if (code === 'auth/operation-not-allowed' || message.includes('operation-not-allowed')) {
+  if (
+    code === 'auth/operation-not-allowed' ||
+    message.includes('operation-not-allowed')
+  ) {
     return (
       'Phone OTP is not enabled in Firebase yet. In Firebase Console: enable Phone sign-in, ' +
       'add Pakistan (PK) under Authentication → Settings → SMS region policy, add your app SHA-1, ' +
@@ -68,7 +72,7 @@ export const mapFirebaseOtpError = (error) => {
 /**
  * Accepts local PK digits (3001234567), +923001234567, or 923001234567.
  */
-export const normalizePhone = (value) => {
+export const normalizePhone = (value, defaultCountry = 'PK') => {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
@@ -86,25 +90,30 @@ export const normalizePhone = (value) => {
     return `+92${digits.slice(1)}`;
   }
 
-  return toE164FromLocal(digits);
+  const parsed = parsePhoneNumberFromString(raw, defaultCountry);
+  return parsed?.number || toE164FromLocal(digits);
 };
 
-export const validatePhoneForOtp = (value) => {
+export const validatePhoneForOtp = value => {
   const e164 = normalizePhone(value);
   if (!/^\+923\d{9}$/.test(e164)) {
     return {
       ok: false,
-      error: 'Enter a valid Pakistani mobile number (10 digits starting with 3)',
+      error:
+        'Enter a valid Pakistani mobile number (10 digits starting with 3)',
     };
   }
   const local = e164.slice(3);
   if (!isValidPkLocalPhone(local)) {
-    return { ok: false, error: 'Number must start with 3 and be 10 digits long' };
+    return {
+      ok: false,
+      error: 'Number must start with 3 and be 10 digits long',
+    };
   }
   return { ok: true, e164 };
 };
 
-export const sendPhoneOtp = async (phone) => {
+export const sendPhoneOtp = async phone => {
   const auth = getAuth();
   if (!auth) {
     throw firebaseNotReadyError();

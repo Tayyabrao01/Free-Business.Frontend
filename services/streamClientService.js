@@ -1,14 +1,23 @@
 import { StreamChat } from 'stream-chat';
-import { getStreamVideoClientClass, isStreamVideoAvailable } from './streamVideoOptional';
+import {
+  getStreamVideoClientClass,
+  isStreamVideoAvailable,
+} from './streamVideoOptional';
 import {
   fetchStreamChatToken,
   syncStreamUser,
   openChatSession,
 } from './streamApi';
-import { mapStreamChatError, delay, isMembersFieldError, isChannelNotFoundError } from '../utils/streamChatErrors';
+import {
+  mapStreamChatError,
+  delay,
+  isMembersFieldError,
+  isChannelNotFoundError,
+} from '../utils/streamChatErrors';
 import { getApiErrorMessage } from '../utils/apiError';
 
-const shouldRebuildChat = (error) => isMembersFieldError(error) || isChannelNotFoundError(error);
+const shouldRebuildChat = error =>
+  isMembersFieldError(error) || isChannelNotFoundError(error);
 import {
   getDirectMessageChannelId,
   getDirectCallId,
@@ -48,12 +57,10 @@ const waitForVideoConnection = (client, timeoutMs = 20000) =>
 export const getChatClient = () => chatClientInstance;
 export const getVideoClient = () => videoClientInstance;
 
-export const isChatClientReady = (expectedUserId) => {
+export const isChatClientReady = expectedUserId => {
   const expected = expectedUserId?.toString();
   return Boolean(
-    chatClientInstance &&
-    expected &&
-    chatClientInstance.userID === expected
+    chatClientInstance && expected && chatClientInstance.userID === expected,
   );
 };
 
@@ -90,9 +97,12 @@ export const ensureChatClientReady = async (appUser, reconnectFn) => {
     await Promise.race([
       reconnectFn(),
       new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Messaging connection timed out')), CONNECT_TIMEOUT_MS);
+        setTimeout(
+          () => reject(new Error('Messaging connection timed out')),
+          CONNECT_TIMEOUT_MS,
+        );
       }),
-    ]).catch((error) => {
+    ]).catch(error => {
       console.warn('Stream reconnect:', error?.message);
     });
   }
@@ -129,7 +139,7 @@ export const disconnectStreamClients = async () => {
   videoClientInstance = null;
 };
 
-export const connectStreamClients = async (appUser) => {
+export const connectStreamClients = async appUser => {
   if (!appUser?._id) {
     throw new Error('User is required to connect Stream');
   }
@@ -144,9 +154,14 @@ export const connectStreamClients = async (appUser) => {
           const streamUser = {
             id: userId,
             name: appUser.name || 'User',
-            image: resolveMediaUrl(appUser.avatar || appUser.profileImage) || undefined,
+            image:
+              resolveMediaUrl(appUser.avatar || appUser.profileImage) ||
+              undefined,
           };
-          const { data } = await fetchStreamChatToken(userId, appUser.name || 'User');
+          const { data } = await fetchStreamChatToken(
+            userId,
+            appUser.name || 'User',
+          );
           if (data?.token && data?.apiKey) {
             videoClientInstance = StreamVideoClient.getOrCreateInstance({
               apiKey: data.apiKey,
@@ -186,9 +201,14 @@ export const connectStreamClients = async (appUser) => {
           const streamUser = {
             id: userId,
             name: appUser.name || 'User',
-            image: resolveMediaUrl(appUser.avatar || appUser.profileImage) || undefined,
+            image:
+              resolveMediaUrl(appUser.avatar || appUser.profileImage) ||
+              undefined,
           };
-          const { data } = await fetchStreamChatToken(userId, appUser.name || 'User');
+          const { data } = await fetchStreamChatToken(
+            userId,
+            appUser.name || 'User',
+          );
           if (data?.token && data?.apiKey) {
             videoClientInstance = StreamVideoClient.getOrCreateInstance({
               apiKey: data.apiKey,
@@ -217,7 +237,9 @@ export const connectStreamClients = async (appUser) => {
   const { data } = await fetchStreamChatToken(userId, userName);
 
   if (!data?.token || !data?.apiKey) {
-    throw new Error(data?.message || 'Invalid Stream token response from server');
+    throw new Error(
+      data?.message || 'Invalid Stream token response from server',
+    );
   }
 
   const token = data.token;
@@ -259,12 +281,12 @@ export const connectStreamClients = async (appUser) => {
   };
 };
 
-export const isVideoClientReady = (expectedUserId) => {
+export const isVideoClientReady = expectedUserId => {
   const expected = expectedUserId?.toString();
   return Boolean(
     videoClientInstance?.state?.connectedUser?.id &&
-    expected &&
-    videoClientInstance.state.connectedUser.id === expected
+      expected &&
+      videoClientInstance.state.connectedUser.id === expected,
   );
 };
 
@@ -314,12 +336,17 @@ const subscribeToChannel = async (chatClient, channelType, channelId) => {
   await withTimeout(
     channel.query({ watch: true, state: true }),
     WATCH_TIMEOUT_MS,
-    'Chat load timed out. Tap Retry.'
+    'Chat load timed out. Tap Retry.',
   );
   return channel;
 };
 
-export const loadChatChannel = async (chatClient, appUser, reconnectFn, params = {}) => {
+export const loadChatChannel = async (
+  chatClient,
+  appUser,
+  reconnectFn,
+  params = {},
+) => {
   if (!chatClient?.userID) {
     throw new Error('Chat client not connected');
   }
@@ -359,14 +386,18 @@ export const loadChatChannel = async (chatClient, appUser, reconnectFn, params =
     (otherUserId ? getDirectMessageChannelId(userId, otherUserId) : null);
 
   // Never auto-rebuild group channels — that hard-deletes message history.
-  const allowRebuild = Boolean(forceRebuild) && !groupId && !isGroupChannelId(knownChannelId);
+  const allowRebuild =
+    Boolean(forceRebuild) && !groupId && !isGroupChannelId(knownChannelId);
 
   if (knownChannelId && !allowRebuild) {
     try {
       return await subscribeToChannel(chatClient, channelType, knownChannelId);
     } catch (watchError) {
       // Fall through to soft open (membership sync) only — still no forceRebuild for groups.
-      if (!shouldRebuildChat(watchError) && !isChannelNotFoundError(watchError)) {
+      if (
+        !shouldRebuildChat(watchError) &&
+        !isChannelNotFoundError(watchError)
+      ) {
         throw new Error(mapStreamChatError(watchError));
       }
     }
@@ -382,7 +413,9 @@ export const loadChatChannel = async (chatClient, appUser, reconnectFn, params =
   } catch (error) {
     const status = error?.response?.status;
     if (status === 404) {
-      throw new Error('Chat API missing. Deploy backend v2.7.0 and restart server.');
+      throw new Error(
+        'Chat API missing. Deploy backend v2.7.0 and restart server.',
+      );
     }
     throw new Error(getApiErrorMessage(error, 'Could not prepare chat'));
   }
@@ -417,20 +450,20 @@ export const watchExistingChannel = async (
   currentUserId,
   otherUserId,
   otherUserName,
-  groupId
+  groupId,
 ) =>
   loadChatChannel(
     chatClient,
     { _id: currentUserId || chatClient.userID },
     null,
-    { channelId, channelType, otherUserId, otherUserName, groupId }
+    { channelId, channelType, otherUserId, otherUserName, groupId },
   );
 
 export const openDirectMessageChannel = async (
   chatClient,
   currentUserId,
   otherUserId,
-  otherUserName
+  otherUserName,
 ) =>
   loadChatChannel(chatClient, { _id: currentUserId }, null, {
     otherUserId,
@@ -441,7 +474,7 @@ export const openGroupChannel = async (chatClient, groupId) =>
   loadChatChannel(chatClient, { _id: chatClient.userID }, null, { groupId });
 
 const buildVideoCallMembers = (userIds, adminUserId) =>
-  userIds.map((user_id) => ({
+  userIds.map(user_id => ({
     user_id: user_id.toString(),
     role: user_id.toString() === adminUserId?.toString() ? 'admin' : 'user',
   }));
@@ -452,7 +485,8 @@ export const joinGroupCall = async (
   groupId,
   groupName,
   memberIds,
-  videoEnabled
+  videoEnabled,
+  joinMedia = true,
 ) => {
   if (!videoClient) {
     throw new Error('Video client not connected');
@@ -462,14 +496,14 @@ export const joinGroupCall = async (
     new Set(
       [...(memberIds || []), currentUserId.toString()]
         .filter(Boolean)
-        .map((id) => id.toString())
-    )
+        .map(id => id.toString()),
+    ),
   );
 
   await Promise.all(
     uniqueMembers
-      .filter((id) => id !== currentUserId.toString())
-      .map((id) => ensureStreamUserExists(id))
+      .filter(id => id !== currentUserId.toString())
+      .map(id => ensureStreamUserExists(id)),
   );
 
   const callId = getGroupCallId(groupId);
@@ -484,6 +518,7 @@ export const joinGroupCall = async (
         groupId: groupId.toString(),
         groupName: groupName || 'Group',
         isGroupCall: true,
+        callType: videoEnabled ? 'video' : 'audio',
         videoEnabled: Boolean(videoEnabled),
       },
       members: streamMembers,
@@ -491,7 +526,11 @@ export const joinGroupCall = async (
   };
 
   try {
-    await withTimeout(call.create(createPayload), 20000, 'Group call setup timed out');
+    await withTimeout(
+      call.create(createPayload),
+      20000,
+      'Group call setup timed out',
+    );
   } catch (createError) {
     const exists = String(createError?.message || '')
       .toLowerCase()
@@ -500,7 +539,7 @@ export const joinGroupCall = async (
       await withTimeout(
         call.getOrCreate(createPayload),
         20000,
-        'Group call setup timed out'
+        'Group call setup timed out',
       );
     } else {
       await withTimeout(call.get(), 15000, 'Could not load group call');
@@ -512,24 +551,32 @@ export const joinGroupCall = async (
     }
   }
 
-  let lastJoinError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await withTimeout(call.join({ create: true }), 20000, 'Could not join group call');
-      lastJoinError = null;
-      break;
-    } catch (joinError) {
-      lastJoinError = joinError;
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  if (joinMedia) {
+    let lastJoinError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await withTimeout(
+          call.join({ create: true }),
+          20000,
+          'Could not join group call',
+        );
+        lastJoinError = null;
+        break;
+      } catch (joinError) {
+        lastJoinError = joinError;
+        if (attempt < 2) {
+          await new Promise(resolve =>
+            setTimeout(resolve, 500 * (attempt + 1)),
+          );
+        }
       }
     }
-  }
-  if (lastJoinError) {
-    throw lastJoinError;
+    if (lastJoinError) {
+      throw lastJoinError;
+    }
   }
 
-  if (!videoEnabled) {
+  if (!videoEnabled && joinMedia) {
     try {
       await call.camera.disable();
     } catch (cameraError) {
@@ -568,7 +615,8 @@ export const joinDirectCall = async (
   currentUserId,
   otherUserId,
   otherUserName,
-  videoEnabled
+  videoEnabled,
+  joinMedia = true,
 ) => {
   if (!videoClient) {
     throw new Error('Video client not connected');
@@ -580,7 +628,7 @@ export const joinDirectCall = async (
   const call = videoClient.call('default', callId);
   const streamMembers = buildVideoCallMembers(
     [currentUserId.toString(), otherUserId.toString()],
-    currentUserId
+    currentUserId,
   );
 
   const createPayload = {
@@ -588,6 +636,7 @@ export const joinDirectCall = async (
     video: videoEnabled,
     data: {
       custom: {
+        callType: videoEnabled ? 'video' : 'audio',
         videoEnabled: Boolean(videoEnabled),
       },
       members: streamMembers,
@@ -595,7 +644,11 @@ export const joinDirectCall = async (
   };
 
   try {
-    await withTimeout(call.create(createPayload), 20000, 'Call setup timed out');
+    await withTimeout(
+      call.create(createPayload),
+      20000,
+      'Call setup timed out',
+    );
   } catch (createError) {
     const exists = String(createError?.message || '')
       .toLowerCase()
@@ -604,7 +657,7 @@ export const joinDirectCall = async (
       await withTimeout(
         call.getOrCreate(createPayload),
         20000,
-        'Call setup timed out'
+        'Call setup timed out',
       );
     } else {
       await withTimeout(call.get(), 15000, 'Could not load call');
@@ -616,24 +669,32 @@ export const joinDirectCall = async (
     }
   }
 
-  let lastJoinError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await withTimeout(call.join({ create: true }), 20000, 'Could not join call');
-      lastJoinError = null;
-      break;
-    } catch (joinError) {
-      lastJoinError = joinError;
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  if (joinMedia) {
+    let lastJoinError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await withTimeout(
+          call.join({ create: true }),
+          20000,
+          'Could not join call',
+        );
+        lastJoinError = null;
+        break;
+      } catch (joinError) {
+        lastJoinError = joinError;
+        if (attempt < 2) {
+          await new Promise(resolve =>
+            setTimeout(resolve, 500 * (attempt + 1)),
+          );
+        }
       }
     }
-  }
-  if (lastJoinError) {
-    throw lastJoinError;
+    if (lastJoinError) {
+      throw lastJoinError;
+    }
   }
 
-  if (!videoEnabled) {
+  if (!videoEnabled && joinMedia) {
     try {
       await call.camera.disable();
     } catch (cameraError) {

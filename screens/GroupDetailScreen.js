@@ -12,7 +12,7 @@ import {
   StatusBar,
   Share,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTranslation } from '../hooks/useTranslation';
@@ -20,6 +20,8 @@ import Avatar from '../components/Avatar';
 import ExpandableText from '../components/ExpandableText';
 import MediaViewerModal from '../components/MediaViewerModal';
 import { resolveMediaUrl } from '../utils/imageUrl';
+import PostMedia from '../components/PostMedia';
+import PostDetailErrorBoundary from '../components/PostDetailErrorBoundary';
 import { getApiErrorMessage } from '../utils/apiError';
 import { useAuth } from '../context/AuthContext';
 import { useStream } from '../context/StreamProvider';
@@ -74,11 +76,12 @@ const formatRelativeTime = (dateString) => {
   return date.toLocaleDateString();
 };
 
-const GroupDetailScreen = ({ route, navigation }) => {
-  const { groupId } = route.params;
+const GroupDetailContent = ({ route, navigation }) => {
+  const { groupId } = route.params || {};
   const { t } = useTranslation();
   const { user } = useAuth();
   const { reconnect } = useStream();
+  const isFocused = useIsFocused();
 
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,12 +89,24 @@ const GroupDetailScreen = ({ route, navigation }) => {
   const [posting, setPosting] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [postMediaPositions, setPostMediaPositions] = useState({});
   const [activeTab, setActiveTab] = useState('feed'); // 'feed' | 'members' | 'about'
   const [viewerUri, setViewerUri] = useState(null);
 
   const loadGroup = async () => {
     try {
       const response = await getGroupDetails(groupId);
+      console.log('[post-detail] group response:', {
+        hasData: Boolean(response?.data),
+        postsType: Array.isArray(response?.data?.posts)
+          ? 'array'
+          : typeof response?.data?.posts,
+        postsCount: Array.isArray(response?.data?.posts)
+          ? response.data.posts.length
+          : 0,
+      });
       setGroup(response.data);
     } catch (error) {
       console.error('Group detail error:', error);
@@ -316,9 +331,9 @@ const GroupDetailScreen = ({ route, navigation }) => {
     .join('')
     .toUpperCase();
 
-  const postsList = group.posts || [];
-  const membersList = group.members || [];
-  const pendingList = group.pendingMembers || [];
+  const postsList = Array.isArray(group.posts) ? group.posts.filter(Boolean) : [];
+  const membersList = Array.isArray(group.members) ? group.members.filter(Boolean) : [];
+  const pendingList = Array.isArray(group.pendingMembers) ? group.pendingMembers.filter(Boolean) : [];
 
   return (
     <View style={styles.container}>
@@ -350,6 +365,9 @@ const GroupDetailScreen = ({ route, navigation }) => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        onLayout={event => setViewportHeight(event.nativeEvent.layout.height)}
+        onScroll={event => setScrollOffset(event.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
       >
         {/* Luxury Hero Banner / Cover */}
         <View style={styles.heroCover}>
@@ -687,15 +705,19 @@ const GroupDetailScreen = ({ route, navigation }) => {
 
             {/* Posts Feed */}
             {postsList.length > 0 ? (
-              postsList.map((post) => {
+              postsList.map((post, postIndex) => {
                 const authorName = post.author?.name || t('common.user');
                 const authorAvatar = post.author?.avatar;
                 const authorId = post.author?._id;
                 const timeAgo = formatRelativeTime(post.createdAt);
-                const postMedia = post.imageUrl ? resolveMediaUrl(post.imageUrl) : null;
+                const rawMedia = Array.isArray(post.media) ? post.media[0] : null;
+                const postMedia = typeof rawMedia?.url === 'string' ? rawMedia : (typeof post.imageUrl === 'string' ? {
+                  url: post.imageUrl,
+                  type: 'image',
+                } : null);
 
                 return (
-                  <View key={post._id} style={styles.postCard}>
+                  <View key={post._id || post.createdAt || `legacy-post-${postIndex}`} style={styles.postCard}>
                     {/* Post Header */}
                     <View style={styles.postCardHeader}>
                       <TouchableOpacity
@@ -735,9 +757,34 @@ const GroupDetailScreen = ({ route, navigation }) => {
                       <TouchableOpacity
                         style={styles.postMediaWrapper}
                         activeOpacity={0.9}
-                        onPress={() => setViewerUri(postMedia)}
+                        onPress={() => setViewerUri(resolveMediaUrl(postMedia.url))}
+                        disabled={postMedia.type === 'video'}
                       >
-                        <Image source={{ uri: postMedia }} style={styles.postMediaImage} />
+                        <PostMedia
+                          media={postMedia}
+                          style={styles.postMediaImage}
+                          scrollOffset={scrollOffset}
+                          viewportHeight={viewportHeight}
+                          isVisible={
+                            isFocused &&
+                            postMediaPositions[post._id]
+                              ? postMediaPositions[post._id].y +
+                                  postMediaPositions[post._id].height >
+                                  scrollOffset &&
+                                postMediaPositions[post._id].y < scrollOffset + viewportHeight
+                              : true
+                          }
+                          onPositionChange={(y, height) =>
+                            setPostMediaPositions(previous => ({
+                              ...previous,
+                              [post._id]: { y, height },
+                            }))
+                          }
+                          onPress={() => {
+                            const mediaUrl = resolveMediaUrl(postMedia?.url);
+                            if (mediaUrl) setViewerUri(mediaUrl);
+                          }}
+                        />
                         <View style={styles.zoomBadge}>
                           <Ionicons name="scan-outline" size={12} color="#FFFFFF" />
                           <Text style={styles.zoomBadgeText}>Tap to zoom</Text>
@@ -1760,5 +1807,11 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
   },
 });
+
+const GroupDetailScreen = (props) => (
+  <PostDetailErrorBoundary>
+    <GroupDetailContent {...props} />
+  </PostDetailErrorBoundary>
+);
 
 export default GroupDetailScreen;

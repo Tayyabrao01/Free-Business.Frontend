@@ -1,0 +1,5 @@
+# ninja log v5
+7	92836	8159521412504552	CMakeFiles/rnscreens.dir/src/main/cpp/jni-adapter.cpp.o	9bf4c2f130d9f5de
+380	95329	8159521440652072	CMakeFiles/rnscreens.dir/70dcff80abf65dea1f099915b3abe496/react-native-screens/cpp/RNScreensTurboModule.cpp.o	b1569b78df3f0453
+95466	101359	8159521489705920	C:/Users/tayya/OneDrive/Desktop/Free Business/frontendApp/node_modules/react-native-screens/android/build/intermediates/cxx/RelWithDebInfo/13y344bf/obj/arm64-v8a/librnscreens.so	91ea7a89f4375a38
+85	2580	8159597041166263	C:/Users/tayya/OneDrive/Desktop/Free Business/frontendApp/node_modules/react-native-screens/android/build/intermediates/cxx/RelWithDebInfo/13y344bf/obj/arm64-v8a/librnscreens.so	91ea7a89f4375a38

@@ -1,8 +1,12 @@
 import { Platform } from 'react-native';
-import notifee, { AndroidImportance, AndroidCategory } from '@notifee/react-native';
+import notifee, {
+  AndroidImportance,
+  AndroidCategory,
+  AndroidVisibility,
+} from '@notifee/react-native';
 
-const MESSAGE_CHANNEL_ID = 'freebusiness_messages';
-const CALL_CHANNEL_ID = 'freebusiness_incoming_call';
+export const MESSAGE_CHANNEL_ID = 'freebusiness_messages';
+export const CALL_CHANNEL_ID = 'calls_v5'; // ✅ Custom ringtone channel
 
 export const isFirebaseConfigured = () => {
   try {
@@ -68,7 +72,7 @@ export const createNotificationChannels = async () => {
       id: CALL_CHANNEL_ID,
       name: 'Incoming calls',
       importance: AndroidImportance.HIGH,
-      sound: 'default',
+      sound: 'ringtone', // ✅ Custom ringtone for calls
       vibration: true,
       bypassDnd: true,
     });
@@ -140,7 +144,15 @@ const parsePushPayload = (remoteMessage) => {
       channelId: data.channel_id || data.channelId || '',
       channelType: data.channel_type || data.channelType || 'messaging',
       caller_name: callerName,
-      video: String(data.video ?? data.video_enabled ?? 'true'),
+      video: String(
+        data.call_type === 'audio' || data.callType === 'audio'
+          ? false
+          : data.video ?? data.video_enabled ?? 'true',
+      ),
+      callType:
+        data.call_type ||
+        data.callType ||
+        (data.video === 'false' || data.video === false ? 'audio' : 'video'),
       isGroupCall: String(data.isGroupCall || data.is_group_call || 'false'),
       isGroupChat: String(data.isGroupChat || data.is_group || 'false'),
     },
@@ -152,6 +164,7 @@ export const displayIncomingCallNotification = async ({
   isGroupCall = false,
   callCid = '',
   video = true,
+  callType = video ? 'video' : 'audio',
   otherUserId = '',
   groupId = '',
   groupName = '',
@@ -174,17 +187,19 @@ export const displayIncomingCallNotification = async ({
       groupId: groupId || '',
       groupName: groupName || '',
       video: String(Boolean(video)),
+      callType,
     },
     android: {
       channelId: CALL_CHANNEL_ID,
       importance: AndroidImportance.HIGH,
       category: AndroidCategory.CALL,
+      visibility: AndroidVisibility.PUBLIC,
       pressAction: { id: 'default' },
-      sound: 'default',
+      sound: 'ringtone', // ✅ Custom ringtone for incoming calls
       vibrationPattern: [300, 500, 300, 500, 300, 500],
       fullScreenAction: { id: 'default', launchActivity: 'default' },
       ongoing: true,
-      loopSound: true,
+      loopSound: true, // ✅ Loops the ringtone
       autoCancel: false,
     },
   });
@@ -195,6 +210,7 @@ export const displayRemotePushNotification = async (remoteMessage) => {
     return;
   }
 
+  await createNotificationChannels();
   const { title, body, isCall, data } = parsePushPayload(remoteMessage);
 
   await notifee.displayNotification({
@@ -206,42 +222,27 @@ export const displayRemotePushNotification = async (remoteMessage) => {
       channelId: isCall ? CALL_CHANNEL_ID : MESSAGE_CHANNEL_ID,
       importance: AndroidImportance.HIGH,
       category: isCall ? AndroidCategory.CALL : AndroidCategory.MESSAGE,
+      visibility: AndroidVisibility.PUBLIC,
       pressAction: { id: 'default' },
-      sound: 'default',
+      sound: isCall ? 'ringtone' : 'default', // ✅ Custom ringtone for calls
       vibrationPattern: isCall ? [300, 500, 300, 500, 300, 500] : [200, 300],
       fullScreenAction: isCall
         ? { id: 'default', launchActivity: 'default' }
         : undefined,
+      actions: isCall
+        ? [
+            { title: 'Answer', pressAction: { id: 'answer' } },
+            { title: 'Decline', pressAction: { id: 'decline' } },
+          ]
+        : undefined,
       ongoing: isCall,
-      loopSound: isCall,
+      loopSound: isCall, // ✅ Loops the ringtone
       autoCancel: !isCall,
     },
   });
 };
 
-export const registerPushBackgroundHandler = () => {
-  if (Platform.OS !== 'android' || !isFirebaseConfigured()) {
-    return;
-  }
-
-  const messaging = getMessaging();
-  if (!messaging) {
-    return;
-  }
-
-  try {
-    messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-      try {
-        await createNotificationChannels();
-        await displayRemotePushNotification(remoteMessage);
-      } catch (error) {
-        console.warn('Background push handler:', error?.message);
-      }
-    });
-  } catch (error) {
-    console.warn('registerPushBackgroundHandler:', error?.message);
-  }
-};
+// ❌ REMOVED registerPushBackgroundHandler (it is now in index.js)
 
 let foregroundUnsubscribe = null;
 

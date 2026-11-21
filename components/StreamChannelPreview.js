@@ -176,6 +176,8 @@ const StreamChannelPreview = ({
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#141419',

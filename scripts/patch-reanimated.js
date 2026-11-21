@@ -12,11 +12,25 @@ if (!fs.existsSync(cmakeListsPath)) {
   process.exit(0);
 }
 
-// 1. Ensure directory junction android/Common -> ../Common exists
+const applyObjectPathMax = (content) => {
+  if (content.includes('CMAKE_OBJECT_PATH_MAX')) {
+    return content.replace(
+      /set\(CMAKE_OBJECT_PATH_MAX \d+\)/g,
+      'set(CMAKE_OBJECT_PATH_MAX 50)'
+    );
+  }
+  return content.replace(
+    /cmake_minimum_required\(VERSION 3\.8\)/,
+    'cmake_minimum_required(VERSION 3.8)\nset(CMAKE_OBJECT_PATH_MAX 50)'
+  );
+};
+
 if (!fs.existsSync(commonJunctionPath) && fs.existsSync(commonRealPath)) {
   try {
     if (process.platform === 'win32') {
-      execSync(`cmd.exe /c mklink /J "${commonJunctionPath}" "${commonRealPath}"`, { stdio: 'ignore' });
+      execSync(`cmd.exe /c mklink /J "${commonJunctionPath}" "${commonRealPath}"`, {
+        stdio: 'ignore',
+      });
       console.log('Created junction for reanimated/android/Common');
     }
   } catch (e) {
@@ -24,17 +38,28 @@ if (!fs.existsSync(commonJunctionPath) && fs.existsSync(commonRealPath)) {
   }
 }
 
-// 2. Patch CMakeLists.txt to handle Windows long paths and avoid infinite glob verification loop
-let cmakeContent = fs.readFileSync(cmakeListsPath, 'utf8');
+const cmakeFiles = [];
+const walk = (dir) => {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walk(full);
+    } else if (entry.name === 'CMakeLists.txt') {
+      cmakeFiles.push(full);
+    }
+  }
+};
+walk(androidDir);
 
-if (!cmakeContent.includes('CMAKE_OBJECT_PATH_MAX')) {
-  cmakeContent = cmakeContent.replace(
-    'cmake_minimum_required(VERSION 3.8)',
-    'cmake_minimum_required(VERSION 3.8)\n\nset(CMAKE_OBJECT_PATH_MAX 1024)'
-  );
+for (const filePath of cmakeFiles) {
+  let cmakeContent = fs.readFileSync(filePath, 'utf8');
+  cmakeContent = applyObjectPathMax(cmakeContent);
+  cmakeContent = cmakeContent.replace(/ CONFIGURE_DEPENDS/g, '');
+  fs.writeFileSync(filePath, cmakeContent, 'utf8');
 }
 
-// Update COMMON_SRC_DIR to point to local Common junction
+let cmakeContent = fs.readFileSync(cmakeListsPath, 'utf8');
+
 if (cmakeContent.includes('set (COMMON_SRC_DIR ${CMAKE_SOURCE_DIR}/../Common)')) {
   cmakeContent = cmakeContent.replace(
     'set (COMMON_SRC_DIR ${CMAKE_SOURCE_DIR}/../Common)',
@@ -42,15 +67,13 @@ if (cmakeContent.includes('set (COMMON_SRC_DIR ${CMAKE_SOURCE_DIR}/../Common)'))
   );
 }
 
-// Remove CONFIGURE_DEPENDS which breaks on Windows CMake Ninja
-if (cmakeContent.includes('file(GLOB_RECURSE SOURCES_COMMON CONFIGURE_DEPENDS "${COMMON_SRC_DIR}/cpp/**.cpp")')) {
+if (cmakeContent.includes('set(COMMON_CPP_DIR "${CMAKE_SOURCE_DIR}/../Common/cpp")')) {
   cmakeContent = cmakeContent.replace(
-    'file(GLOB_RECURSE SOURCES_COMMON CONFIGURE_DEPENDS "${COMMON_SRC_DIR}/cpp/**.cpp")',
-    'file(GLOB_RECURSE SOURCES_COMMON "${COMMON_SRC_DIR}/cpp/**.cpp")'
+    'set(COMMON_CPP_DIR "${CMAKE_SOURCE_DIR}/../Common/cpp")',
+    'set(COMMON_CPP_DIR "${CMAKE_SOURCE_DIR}/Common/cpp")'
   );
 }
 
-// Avoid Ninja space-splitting bug in build.ninja by inlining folly-flags instead of including path with spaces
 if (cmakeContent.includes('include("${REACT_NATIVE_DIR}/ReactAndroid/cmake-utils/folly-flags.cmake")')) {
   cmakeContent = cmakeContent.replace(
     'include("${REACT_NATIVE_DIR}/ReactAndroid/cmake-utils/folly-flags.cmake")',
@@ -58,7 +81,6 @@ if (cmakeContent.includes('include("${REACT_NATIVE_DIR}/ReactAndroid/cmake-utils
   );
 }
 
-// Disable -Werror so Clang 19 / NDK 28 warnings like -Wvla-cxx-extension do not fail the build
 if (cmakeContent.includes('-std=c++${CMAKE_CXX_STANDARD} -Wall -Werror')) {
   cmakeContent = cmakeContent.replace(
     '-std=c++${CMAKE_CXX_STANDARD} -Wall -Werror',
@@ -67,4 +89,17 @@ if (cmakeContent.includes('-std=c++${CMAKE_CXX_STANDARD} -Wall -Werror')) {
 }
 
 fs.writeFileSync(cmakeListsPath, cmakeContent, 'utf8');
+
+const gradlePath = path.join(androidDir, 'build.gradle');
+if (fs.existsSync(gradlePath)) {
+  let gradle = fs.readFileSync(gradlePath, 'utf8');
+  if (!gradle.includes('-DCMAKE_OBJECT_PATH_MAX=')) {
+    gradle = gradle.replace(
+      '"-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"',
+      '"-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",\n                        "-DCMAKE_OBJECT_PATH_MAX=50"'
+    );
+  }
+  fs.writeFileSync(gradlePath, gradle, 'utf8');
+}
+
 console.log('Patched react-native-reanimated CMakeLists.txt successfully');

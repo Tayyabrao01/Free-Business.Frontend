@@ -9,6 +9,8 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.modules.network.OkHttpClientFactory
 import com.facebook.react.modules.network.OkHttpClientProvider
+import com.facebook.react.soloader.OpenSourceMergedSoMapping // ✅ ADDED THIS IMPORT
+import com.facebook.soloader.SoLoader
 import com.microsoft.codepush.react.CodePush
 import okhttp3.OkHttpClient
 
@@ -44,9 +46,13 @@ class MainApplication : Application(), ReactApplication {
     }
   }
 
-  override fun getReactNativeHost(): ReactNativeHost = mReactNativeHost
+  override val reactNativeHost: ReactNativeHost
+    get() = mReactNativeHost
 
   override fun onCreate() {
+    // ✅ 1. Initialize SoLoader with the mapping (FIXES THE CRASH)
+    SoLoader.init(this, OpenSourceMergedSoMapping)
+
     OkHttpClientProvider.setOkHttpClientFactory(object : OkHttpClientFactory {
       override fun createNewNetworkModuleClient(): OkHttpClient {
         return OkHttpClientProvider.createClientBuilder()
@@ -64,7 +70,10 @@ class MainApplication : Application(), ReactApplication {
           .build()
       }
     })
+    
     super.onCreate()
+    
+    // ✅ 2. Only load New Architecture if it's actually enabled in gradle.properties
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       DefaultNewArchitectureEntryPoint.load()
     }

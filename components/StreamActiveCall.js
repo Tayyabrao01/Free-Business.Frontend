@@ -1,129 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { useCall, useCallStateHooks } from '@stream-io/video-react-bindings';
-import { CallingState } from '@stream-io/video-client';
 import { configureJoinedCallAudio } from '../utils/callAudio';
 import { stopIncomingRingtone } from '../utils/incomingRingtone';
+import { stopRingbackTone } from '../utils/RingbackService';
 import { endActiveCall } from '../services/callLifecycle';
 import { cancelIncomingCallNotification } from '../services/NotificationService';
-import { getStreamCallUi } from '../services/streamVideoOptional';
+import {
+  joinAgoraChannel,
+  leaveAgoraChannel,
+  renewAgoraToken,
+} from '../services/agoraCallService';
+import { fetchAgoraToken } from '../services/streamApi';
+import {
+  startAgoraForegroundService,
+  stopAgoraForegroundService,
+} from '../services/agoraForegroundService';
 import IncomingCallScreen from '../screens/IncomingCallScreen';
 import ActiveCallScreen from '../screens/ActiveCallScreen';
 import CustomOutgoingCallView from './CustomOutgoingCallView';
 import CallEndedOverlay from './CallEndedOverlay';
-
-const CallPhase = ({
-  video,
-  isGroupCall,
-  callerName,
-  callerAvatar,
-  onHangup,
-  onCallJoined,
-}) => {
-  const call = useCall();
-  const { useCallCallingState, useParticipants } = useCallStateHooks();
-  const callingState = useCallCallingState();
-  const participants = useParticipants();
-  const [showEnded, setShowEnded] = useState(false);
-  const [connectedAt, setConnectedAt] = useState(null);
-
-  const isOutgoing = Boolean(call?.isCreatedByMe);
-  const myId = call?.currentUserId?.toString();
-  const remoteJoined = participants.some(
-    (participant) => participant?.userId?.toString() !== myId
-  );
-
-  const finishCall = useCallback(
-    async (options = {}) => {
-      stopIncomingRingtone();
-      await cancelIncomingCallNotification();
-      await endActiveCall(call, {
-        isIncoming: !isOutgoing,
-        wasConnected: options.wasConnected,
-      });
-      if (options.showEnded) {
-        setShowEnded(true);
-        setTimeout(() => onHangup?.(), 900);
-      } else {
-        onHangup?.();
-      }
-    },
-    [call, isOutgoing, onHangup]
-  );
-
-  useEffect(() => {
-    if (callingState === CallingState.JOINED) {
-      onCallJoined?.();
-      setConnectedAt((prev) => prev || Date.now());
-      configureJoinedCallAudio(call, video);
-    }
-  }, [callingState, onCallJoined, call, video]);
-
-  useEffect(() => {
-    if (callingState === CallingState.LEFT) {
-      setShowEnded(true);
-      const timer = setTimeout(() => onHangup?.(), 900);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [callingState, onHangup]);
-
-  if (showEnded) {
-    return <CallEndedOverlay message="Call ended" />;
-  }
-
-  if (callingState === CallingState.RINGING && !isOutgoing) {
-    return (
-      <IncomingCallScreen
-        callerName={callerName}
-        callerAvatar={callerAvatar}
-        isGroupCall={isGroupCall}
-        videoEnabled={video}
-        onAccept={() => {
-          stopIncomingRingtone();
-          cancelIncomingCallNotification();
-          onCallJoined?.();
-        }}
-        onDecline={() => finishCall({ wasConnected: false })}
-      />
-    );
-  }
-
-  if (
-    isOutgoing &&
-    !remoteJoined &&
-    callingState !== CallingState.LEFT &&
-    callingState !== CallingState.IDLE
-  ) {
-    return (
-      <CustomOutgoingCallView
-        calleeName={callerName}
-        isGroupCall={isGroupCall}
-        onCancel={() => finishCall({ wasConnected: false })}
-      />
-    );
-  }
-
-  if (callingState === CallingState.JOINED || remoteJoined) {
-    return (
-      <ActiveCallScreen
-        videoEnabled={video}
-        isGroupCall={isGroupCall}
-        participantName={callerName}
-        connectedAt={connectedAt}
-        onHangup={() => finishCall({ wasConnected: true, showEnded: true })}
-      />
-    );
-  }
-
-  return (
-    <CustomOutgoingCallView
-      calleeName={callerName}
-      isGroupCall={isGroupCall}
-      onCancel={() => finishCall({ wasConnected: false })}
-    />
-  );
-};
 
 const StreamActiveCall = ({
   call,
@@ -133,27 +28,207 @@ const StreamActiveCall = ({
   callerAvatar,
   onHangup,
   onCallJoined,
+  agoraConfig,
+  isIncoming,
 }) => {
-  const callUi = getStreamCallUi();
+  const [accepted, setAccepted] = useState(!isIncoming);
+  const [engine, setEngine] = useState(null);
+  const [remoteUid, setRemoteUid] = useState(null);
+  const [remoteVideoMuted, setRemoteVideoMuted] = useState(true);
+  const [joined, setJoined] = useState(false);
+  const [showEnded, setShowEnded] = useState(false);
+  const [error, setError] = useState(null);
+  const [connectedAt, setConnectedAt] = useState(null);
+  const [micMuted, setMicMuted] = useState(false);
+  const [cameraMuted, setCameraMuted] = useState(!video);
+  const [speakerOn, setSpeakerOn] = useState(Boolean(video));
 
-  if (!callUi || !call) {
-    return null;
+  const finishCall = useCallback(async () => {
+    stopIncomingRingtone();
+    stopRingbackTone();
+    await cancelIncomingCallNotification();
+    await leaveAgoraChannel();
+    await endActiveCall(call, {
+      isIncoming,
+      wasConnected: joined,
+    });
+    onHangup?.();
+  }, [call, isIncoming, joined, onHangup]);
+
+  useEffect(() => {
+    if (!accepted || !agoraConfig) {
+      return undefined;
+    }
+
+    let active = true;
+    startAgoraForegroundService(video).catch(serviceError => {
+      console.warn('[Agora] Foreground service start failed', serviceError);
+    });
+    const eventHandler = {
+      onJoinChannelSuccess: () => {
+        console.log('[Agora] Connection state: joined', {
+          channelName: agoraConfig.channelName,
+          uid: agoraConfig.uid,
+          video,
+        });
+        if (!active) {
+          return;
+        }
+        setJoined(true);
+        setConnectedAt(Date.now());
+        stopIncomingRingtone();
+        stopRingbackTone();
+        configureJoinedCallAudio(null, video);
+        onCallJoined?.();
+      },
+      onUserJoined: (_connection, uid) => {
+        console.log('[Agora] Remote user joined', { uid });
+        if (active) {
+          setRemoteUid(uid);
+          setRemoteVideoMuted(true);
+        }
+      },
+      onRemoteVideoStateChanged: (_connection, uid, state, reason) => {
+        console.log('[Agora] Remote video state changed', {
+          uid,
+          state,
+          reason,
+        });
+        if (!active) {
+          return;
+        }
+        setRemoteVideoMuted(state !== 2);
+      },
+      onUserOffline: (_connection, uid, reason) => {
+        console.log('[Agora] Remote user offline', { uid, reason });
+        if (active) {
+          setRemoteUid(null);
+          setRemoteVideoMuted(true);
+          setShowEnded(true);
+          setTimeout(() => onHangup?.(), 900);
+        }
+      },
+      onConnectionStateChanged: (_connection, state, reason) => {
+        console.log('[Agora] Connection state changed', { state, reason });
+      },
+      onTokenPrivilegeWillExpire: async () => {
+        try {
+          console.log('[Agora] Token will expire; requesting a replacement');
+          const response = await fetchAgoraToken(
+            agoraConfig.channelName,
+            agoraConfig.uid,
+          );
+          const nextToken = response.data?.token;
+          if (!nextToken) {
+            throw new Error('Replacement Agora token was empty');
+          }
+          await renewAgoraToken(nextToken);
+          console.log('[Agora] Token renewed successfully');
+        } catch (tokenError) {
+          console.error('[Agora] Token renewal failed', tokenError);
+        }
+      },
+      onError: (code, message) => {
+        console.error('[Agora] Error', { code, message });
+        if (active) {
+          setError(
+            `Agora error ${code}: ${message || 'Call connection failed'}`,
+          );
+        }
+      },
+      onLeaveChannel: stats => {
+        console.log('[Agora] Local user left channel', { stats });
+        if (active) {
+          setJoined(false);
+          setShowEnded(true);
+        }
+      },
+    };
+
+    joinAgoraChannel({
+      ...agoraConfig,
+      videoEnabled: video,
+      eventHandler,
+    })
+      .then(nextEngine => {
+        if (active) {
+          setEngine(nextEngine);
+        }
+      })
+      .catch(joinError => {
+        if (active) {
+          setError(joinError?.message || 'Call connection failed');
+        }
+      });
+
+    return () => {
+      active = false;
+      stopAgoraForegroundService().catch(serviceError => {
+        console.warn('[Agora] Foreground service stop failed', serviceError);
+      });
+      leaveAgoraChannel().catch(() => {});
+    };
+  }, [accepted, agoraConfig, onCallJoined, onHangup, video]);
+
+  if (showEnded) {
+    return <CallEndedOverlay message="Call ended" />;
   }
 
-  const { StreamCall } = callUi;
+  if (error) {
+    return <CallEndedOverlay message={error} />;
+  }
+
+  if (isIncoming && !accepted) {
+    return (
+      <IncomingCallScreen
+        callerName={callerName}
+        callerAvatar={callerAvatar}
+        isGroupCall={isGroupCall}
+        videoEnabled={video}
+        callKey={call?.cid || call?.id}
+        onAccept={() => {
+          setAccepted(true);
+          stopIncomingRingtone();
+          stopRingbackTone();
+          cancelIncomingCallNotification();
+        }}
+        onDecline={finishCall}
+      />
+    );
+  }
+
+  if (!joined) {
+    return (
+      <CustomOutgoingCallView
+        calleeName={callerName}
+        isGroupCall={isGroupCall}
+        onCancel={finishCall}
+      />
+    );
+  }
 
   return (
     <View style={styles.root}>
-      <StreamCall call={call}>
-        <CallPhase
-          video={video}
-          isGroupCall={isGroupCall}
-          callerName={callerName}
-          callerAvatar={callerAvatar}
-          onHangup={onHangup}
-          onCallJoined={onCallJoined}
-        />
-      </StreamCall>
+      <ActiveCallScreen
+        videoEnabled={video}
+        isGroupCall={isGroupCall}
+        participantName={callerName}
+        connectedAt={connectedAt}
+        onHangup={finishCall}
+        engine={engine}
+        channelName={agoraConfig.channelName}
+        uid={agoraConfig.uid}
+        remoteUid={remoteUid}
+        remoteVideoMuted={remoteVideoMuted}
+        participantAvatar={callerAvatar}
+        micMuted={micMuted}
+        cameraMuted={cameraMuted}
+        speakerOn={speakerOn}
+        onToggleMute={() => setMicMuted(value => !value)}
+        onToggleCamera={() => setCameraMuted(value => !value)}
+        onSwitchCamera={() => {}}
+        onToggleSpeaker={enabled => setSpeakerOn(enabled)}
+      />
     </View>
   );
 };

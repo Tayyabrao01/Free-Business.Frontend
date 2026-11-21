@@ -534,7 +534,12 @@ const ProfileScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* MODERN LUXURY BIO MODAL */}
-      <Modal visible={bioModalVisible} transparent animationType="slide">
+      <Modal
+        visible={bioModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBioModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>

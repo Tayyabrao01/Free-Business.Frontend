@@ -13,6 +13,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { SENTRY_DSN, isSentryEnabled } from './config/sentry';
 import { navigationRef } from './navigation/navigationRef';
 import { ensureNotificationsReady } from './services/NotificationService';
+import ShareIntentHandler from './components/ShareIntentHandler';
 
 if (isSentryEnabled()) {
   Sentry.init({
@@ -46,6 +47,7 @@ const App = () => {
                   <StreamVideoShell>
                     <AppNavigator />
                   </StreamVideoShell>
+                  <ShareIntentHandler />
                   <NotificationSetup />
                 </NavigationContainer>
               </SafeAreaView>

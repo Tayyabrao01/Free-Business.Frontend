@@ -1,25 +1,26 @@
+import groovy.xml.XmlParser
 buildscript {
     ext {
         buildToolsVersion = "35.0.0"
         minSdkVersion = 24
         compileSdkVersion = 35
         targetSdkVersion = 36
-        ndkVersion = "23.1.7779620"
-        kotlinVersion = "1.9.24"
+        ndkVersion = "28.2.13676358"
+        kotlinVersion = "2.0.21"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.7.3")
+        classpath("com.android.tools.build:gradle:8.8.2")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
         classpath("com.google.gms:google-services:4.4.0")
     }
 }
 
-// Stream Video / NetInfo can pull lifecycle 2.10 (KMP) — incompatible with RN 0.72
+// Stream Video / NetInfo can pull lifecycle 2.10 (KMP) — incompatible with this RN Android toolchain
 def lifecycleVersion = '2.6.2'
 def pinAndroidxLifecycle = { resolutionStrategy ->
     resolutionStrategy.eachDependency { details ->
@@ -50,7 +51,15 @@ allprojects {
         mavenLocal()
         maven { url 'https://www.jitpack.io' }
     }
-    configurations.configureEach { pinAndroidxLifecycle(resolutionStrategy) }
+    configurations.configureEach {
+        pinAndroidxLifecycle(resolutionStrategy)
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'io.github.crow-misia.libyuv' && details.requested.name == 'libyuv-android') {
+                details.useVersion '0.37.0'
+                details.because '16 KB page-size support for Android 15+'
+            }
+        }
+    }
 }
 
 subprojects { subproject ->
@@ -93,6 +102,24 @@ subprojects { subproject ->
         subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
             kotlinOptions {
                 jvmTarget = '17'
+            }
+        }
+
+        // Play Console: native .so files must be 16 KB page-size aligned (NDK 27 flag).
+        def cmakeLists = file("${subproject.projectDir}/CMakeLists.txt")
+        if (cmakeLists.exists() &&
+                (subproject.plugins.hasPlugin('com.android.library') ||
+                        subproject.plugins.hasPlugin('com.android.application'))) {
+            subproject.android {
+                defaultConfig {
+                    externalNativeBuild {
+                        cmake {
+                            // ✅ FIXED: Removed the invalid -DCMAKE_OBJECT_PATH_MAX=50 flag
+                            arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                                    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
+                        }
+                    }
+                }
             }
         }
     }

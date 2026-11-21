@@ -1,0 +1,58 @@
+{
+  "buildFiles": [
+    "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\node_modules\\react-native-reanimated\\android\\CMakeLists.txt",
+    "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\node_modules\\react-native-reanimated\\android\\src\\main\\cpp\\reanimated\\CMakeLists.txt",
+    "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\node_modules\\react-native-reanimated\\android\\src\\main\\cpp\\worklets\\CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "C:\\Users\\tayya\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+      "-C",
+      "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\android\\.cxx-short\\react-native-reanimated\\RelWithDebInfo\\6235h48g\\arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "C:\\Users\\tayya\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
+    "-C",
+    "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\android\\.cxx-short\\react-native-reanimated\\RelWithDebInfo\\6235h48g\\arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "reanimated::@89a6a9b85fb42923616c": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "reanimated",
+      "output": "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\node_modules\\react-native-reanimated\\android\\build\\intermediates\\cxx\\RelWithDebInfo\\6235h48g\\obj\\arm64-v8a\\libreanimated.so",
+      "runtimeFiles": [
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\bca97cc8bdfbdf0a869804e17c838100\\transformed\\react-android-0.78.2-release\\prefab\\modules\\reactnative\\libs\\android.arm64-v8a\\libreactnative.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\bca97cc8bdfbdf0a869804e17c838100\\transformed\\react-android-0.78.2-release\\prefab\\modules\\jsi\\libs\\android.arm64-v8a\\libjsi.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\fae0261ffa4867c862ed7965b8957dee\\transformed\\fbjni-0.7.0\\prefab\\modules\\fbjni\\libs\\android.arm64-v8a\\libfbjni.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\bca97cc8bdfbdf0a869804e17c838100\\transformed\\react-android-0.78.2-release\\prefab\\modules\\reactnative\\libs\\android.arm64-v8a\\libreactnative.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\31b7133dde6d153f17e4961782ac9c6a\\transformed\\hermes-android-0.78.2-release\\prefab\\modules\\libhermes\\libs\\android.arm64-v8a\\libhermes.so"
+      ]
+    },
+    "worklets::@a0394df2d94e5212d8bd": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "worklets",
+      "output": "C:\\Users\\tayya\\OneDrive\\Desktop\\Free Business\\frontendApp\\node_modules\\react-native-reanimated\\android\\build\\intermediates\\cxx\\RelWithDebInfo\\6235h48g\\obj\\arm64-v8a\\libworklets.so",
+      "runtimeFiles": [
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\bca97cc8bdfbdf0a869804e17c838100\\transformed\\react-android-0.78.2-release\\prefab\\modules\\jsi\\libs\\android.arm64-v8a\\libjsi.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\fae0261ffa4867c862ed7965b8957dee\\transformed\\fbjni-0.7.0\\prefab\\modules\\fbjni\\libs\\android.arm64-v8a\\libfbjni.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\bca97cc8bdfbdf0a869804e17c838100\\transformed\\react-android-0.78.2-release\\prefab\\modules\\reactnative\\libs\\android.arm64-v8a\\libreactnative.so",
+        "C:\\Users\\tayya\\.gradle\\caches\\8.12\\transforms\\31b7133dde6d153f17e4961782ac9c6a\\transformed\\hermes-android-0.78.2-release\\prefab\\modules\\libhermes\\libs\\android.arm64-v8a\\libhermes.so"
+      ]
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "C:\\Users\\tayya\\AppData\\Local\\Android\\Sdk\\ndk\\27.1.12297006\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+      "cppCompilerExecutable": "C:\\Users\\tayya\\AppData\\Local\\Android\\Sdk\\ndk\\27.1.12297006\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang++.exe"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { stopRingbackTone } from '../utils/RingbackService';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useCall, useCallStateHooks } from '@stream-io/video-react-bindings';
 import { configureJoinedCallAudio, stopCallAudio } from '../utils/callAudio';
 import { stopIncomingRingtone } from '../utils/incomingRingtone';
-import { getStreamCallUi } from '../services/streamVideoOptional';
 import CallControls from '../components/CallControls';
+import { RtcSurfaceView } from 'react-native-agora';
+import Avatar from '../components/Avatar';
 
 /**
  * Active call UI: remote video / audio layout, local PiP via Stream CallContent,
@@ -16,39 +17,37 @@ const ActiveCallScreen = ({
   participantName = 'User',
   onHangup,
   connectedAt = null,
+  engine,
+  channelName,
+  uid,
+  remoteUid,
+  remoteVideoMuted = true,
+  participantAvatar,
+  micMuted,
+  cameraMuted,
+  speakerOn,
+  onToggleMute,
+  onToggleCamera,
+  onSwitchCamera,
+  onToggleSpeaker,
 }) => {
-  const call = useCall();
-  const callUi = getStreamCallUi();
-  const { useParticipants, useLocalParticipant } = useCallStateHooks();
-  const participants = useParticipants();
-  const localParticipant = useLocalParticipant();
   const [joinedAt] = useState(() => connectedAt || Date.now());
 
-  const { CallContent, UserInfo } = callUi || {};
-  const myId = call?.currentUserId?.toString();
-  const remote = useMemo(
-    () =>
-      participants.find((p) => p?.userId?.toString() !== myId) ||
-      participants.find((p) => p !== localParticipant),
-    [participants, myId, localParticipant]
-  );
-  const displayName =
-    remote?.name || remote?.userName || participantName || 'User';
-  const useSpotlight = !isGroupCall && participants.length <= 2;
+  const displayName = participantName || 'User';
 
-  useEffect(() => {
-    stopIncomingRingtone();
-    configureJoinedCallAudio(call, videoEnabled);
-    return () => {
-      // leave audio teardown to endActiveCall / hangup
-    };
-  }, [call, videoEnabled]);
+useEffect(() => {
+  stopIncomingRingtone();
+  stopRingbackTone(); // ✅ Also stop ringback just in case
+  configureJoinedCallAudio(null, videoEnabled);
+  return () => {
+    stopCallAudio();
+  };
+}, [videoEnabled]);
 
-  if (!videoEnabled && UserInfo) {
+  if (!videoEnabled) {
     return (
       <View style={styles.root}>
         <View style={styles.audioCenter}>
-          <UserInfo />
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.kind}>
             {isGroupCall ? 'Group voice call' : 'Voice call'}
@@ -58,22 +57,11 @@ const ActiveCallScreen = ({
           videoEnabled={false}
           connectedAt={joinedAt}
           onHangup={onHangup}
-        />
-      </View>
-    );
-  }
-
-  if (!CallContent) {
-    return (
-      <View style={styles.root}>
-        <View style={styles.audioCenter}>
-          <Text style={styles.name}>{displayName}</Text>
-          <Text style={styles.kind}>Call in progress</Text>
-        </View>
-        <CallControls
-          videoEnabled={videoEnabled}
-          connectedAt={joinedAt}
-          onHangup={onHangup}
+          micMuted={micMuted}
+          cameraMuted={cameraMuted}
+          speakerOn={speakerOn}
+          onToggleMute={onToggleMute}
+          onToggleSpeaker={onToggleSpeaker}
         />
       </View>
     );
@@ -82,12 +70,27 @@ const ActiveCallScreen = ({
   return (
     <View style={styles.root}>
       <View style={styles.videoArea}>
-        <CallContent
-          layout={useSpotlight ? 'spotlight' : 'grid'}
-          CallControls={null}
-          initialInCallManagerAudioMode={videoEnabled ? 'video' : 'audio'}
-          onHangupCallHandler={onHangup}
-        />
+        {engine && remoteUid ? (
+          remoteVideoMuted ? (
+            <View style={styles.remoteAvatarCenter}>
+              <Avatar uri={participantAvatar} name={displayName} size={112} />
+            </View>
+          ) : (
+            <RtcSurfaceView
+              style={styles.remoteVideo}
+              canvas={{ uid: remoteUid }}
+              connection={{ channelId: channelName, localUid: uid }}
+            />
+          )
+        ) : null}
+        {engine ? (
+          <RtcSurfaceView
+            style={styles.localVideo}
+            canvas={{ uid: 0 }}
+            connection={{ channelId: channelName, localUid: uid }}
+            zOrderMediaOverlay
+          />
+        ) : null}
         <View style={styles.nameBanner} pointerEvents="none">
           <Text style={styles.bannerText} numberOfLines={1}>
             {displayName}
@@ -102,6 +105,13 @@ const ActiveCallScreen = ({
             stopCallAudio();
             onHangup?.();
           }}
+          micMuted={micMuted}
+          cameraMuted={cameraMuted}
+          speakerOn={speakerOn}
+          onToggleMute={onToggleMute}
+          onToggleCamera={onToggleCamera}
+          onSwitchCamera={onSwitchCamera}
+          onToggleSpeaker={onToggleSpeaker}
         />
       </View>
     </View>
@@ -115,6 +125,23 @@ const styles = StyleSheet.create({
   },
   videoArea: {
     flex: 1,
+  },
+  remoteVideo: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  remoteAvatarCenter: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0a',
+  },
+  localVideo: {
+    position: 'absolute',
+    top: 24,
+    right: 16,
+    width: 112,
+    height: 168,
+    zIndex: 2,
   },
   nameBanner: {
     position: 'absolute',

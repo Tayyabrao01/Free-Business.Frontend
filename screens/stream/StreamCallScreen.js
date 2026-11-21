@@ -5,8 +5,9 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
+  BackHandler,
 } from 'react-native';
-import { CallingState } from '@stream-io/video-client';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useStream } from '../../context/StreamProvider';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -19,14 +20,17 @@ import {
 } from '../../services/streamClientService';
 import { getGroupIdFromCallId } from '../../utils/streamChannel';
 import { ensureCallPermissions } from '../../utils/callPermissions';
-import {
-  getStreamCallUi,
-  isStreamVideoAvailable,
-} from '../../services/streamVideoOptional';
 import StreamActiveCall from '../../components/StreamActiveCall';
 import { stopIncomingRingtone } from '../../utils/incomingRingtone';
+import { stopRingbackTone } from '../../utils/RingbackService';
 import { addCallLogEntry } from '../../services/callLogService';
 import { formatDisplayError } from '../../utils/apiError';
+import { fetchAgoraToken } from '../../services/streamApi';
+import {
+  getAgoraChannelName,
+  getAgoraUid,
+  leaveAgoraChannel,
+} from '../../services/agoraCallService';
 
 const StreamCallScreen = ({ route, navigation }) => {
   const {
@@ -39,6 +43,7 @@ const StreamCallScreen = ({ route, navigation }) => {
     groupId,
     groupName,
     groupMemberIds = [],
+    callType,
   } = route.params || {};
   const { user } = useAuth();
   const { reconnect } = useStream();
@@ -46,6 +51,7 @@ const StreamCallScreen = ({ route, navigation }) => {
   const [call, setCall] = useState(null);
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(true);
+  const [agoraConfig, setAgoraConfig] = useState(null);
   const activeCallRef = useRef(null);
   const mountedRef = useRef(true);
   const hungUpRef = useRef(false);
@@ -56,8 +62,8 @@ const StreamCallScreen = ({ route, navigation }) => {
     name: isGroupCall ? groupName : otherUserName,
   });
   const isIncoming = Boolean(incomingCallCid);
+  const videoCall = callType ? callType === 'video' : Boolean(video);
 
-  const callUi = getStreamCallUi();
   const displayName =
     peerRef.current.name ||
     (isGroupCall ? groupName : otherUserName) ||
@@ -66,7 +72,9 @@ const StreamCallScreen = ({ route, navigation }) => {
   const persistCallLog = useCallback(
     async (status = 'completed') => {
       const peer = peerRef.current;
-      if (!peer?.id) return;
+      if (!peer?.id) {
+        return;
+      }
 
       const started = callStartedAtRef.current
         ? new Date(callStartedAtRef.current)
@@ -74,7 +82,7 @@ const StreamCallScreen = ({ route, navigation }) => {
       const ended = new Date();
       const durationSec = Math.max(
         0,
-        Math.floor((ended.getTime() - started.getTime()) / 1000)
+        Math.floor((ended.getTime() - started.getTime()) / 1000),
       );
 
       let direction = isIncoming ? 'incoming' : 'outgoing';
@@ -87,7 +95,7 @@ const StreamCallScreen = ({ route, navigation }) => {
           peerId: peer.id,
           peerName: peer.name || 'User',
           direction,
-          kind: video ? 'video' : 'audio',
+          kind: videoCall ? 'video' : 'audio',
           status,
           startedAt: started.toISOString(),
           endedAt: ended.toISOString(),
@@ -95,12 +103,17 @@ const StreamCallScreen = ({ route, navigation }) => {
         });
       }
     },
-    [isGroupCall, isIncoming, video]
+    [isGroupCall, isIncoming, videoCall],
   );
 
   const handleHangup = useCallback(async () => {
+    if (hungUpRef.current) {
+      return;
+    }
     hungUpRef.current = true;
     stopIncomingRingtone();
+    stopRingbackTone();
+    await leaveAgoraChannel();
     await endActiveCall(activeCallRef.current, {
       isIncoming,
       wasConnected: callConnectedRef.current,
@@ -111,21 +124,30 @@ const StreamCallScreen = ({ route, navigation }) => {
     navigation.goBack();
   }, [isIncoming, navigation, persistCallLog]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        () => {
+          handleHangup();
+          return true;
+        },
+      );
+
+      return () => subscription.remove();
+    }, [handleHangup]),
+  );
+
   const handleCallJoined = useCallback(() => {
     callConnectedRef.current = true;
     stopIncomingRingtone();
+    stopRingbackTone();
     if (!callStartedAtRef.current) {
       callStartedAtRef.current = Date.now();
     }
   }, []);
 
   const startCall = useCallback(async () => {
-    if (!isStreamVideoAvailable() || !callUi) {
-      setError(t('stream.callsUnavailableMessage'));
-      setStarting(false);
-      return;
-    }
-
     if (!isIncoming && !isGroupCall && !otherUserId) {
       setError(t('stream.cannotCall'));
       setStarting(false);
@@ -144,7 +166,7 @@ const StreamCallScreen = ({ route, navigation }) => {
     hungUpRef.current = false;
 
     try {
-      const permitted = await ensureCallPermissions(video);
+      const permitted = await ensureCallPermissions(videoCall);
       if (!permitted) {
         setError(t('stream.permissionRequired'));
         return;
@@ -170,7 +192,8 @@ const StreamCallScreen = ({ route, navigation }) => {
           groupId,
           groupName,
           groupMemberIds,
-          video
+          videoCall,
+          false,
         );
         callStartedAtRef.current = Date.now();
       } else {
@@ -179,7 +202,8 @@ const StreamCallScreen = ({ route, navigation }) => {
           user._id,
           otherUserId,
           otherUserName,
-          video
+          videoCall,
+          false,
         );
         callStartedAtRef.current = Date.now();
       }
@@ -192,15 +216,17 @@ const StreamCallScreen = ({ route, navigation }) => {
       activeCallRef.current = activeCall;
 
       if (isGroupCall) {
-        const custom = activeCall?.state?.custom || activeCall?.state?.session?.custom;
+        const custom =
+          activeCall?.state?.custom || activeCall?.state?.session?.custom;
         peerRef.current = {
-          id: groupId || custom?.groupId || getGroupIdFromCallId(activeCall?.id),
+          id:
+            groupId || custom?.groupId || getGroupIdFromCallId(activeCall?.id),
           name: groupName || custom?.groupName || t('groups.groupChat'),
         };
       } else if (!peerRef.current.id || !peerRef.current.name) {
         const members = Object.values(activeCall?.state?.members || {});
         const peer = members.find(
-          (m) => (m?.userId || m?.user?.id)?.toString() !== user._id?.toString()
+          m => (m?.userId || m?.user?.id)?.toString() !== user._id?.toString(),
         );
         peerRef.current = {
           id: peer?.userId || peer?.user?.id || otherUserId,
@@ -208,7 +234,33 @@ const StreamCallScreen = ({ route, navigation }) => {
         };
       }
 
+      const callId =
+        activeCall?.id ||
+        incomingCallCid?.split(':')?.[1] ||
+        `${isGroupCall ? groupId : `${user._id}-${otherUserId}`}`;
+      const channelName = getAgoraChannelName(callId);
+      const uid = getAgoraUid(user._id);
+      const agoraResponse = await fetchAgoraToken(channelName, uid);
+      const {
+        token,
+        appId,
+        channelName: returnedChannelName,
+        uid: returnedUid,
+      } = agoraResponse.data || {};
+      if (!token || !appId || !returnedChannelName) {
+        throw new Error('Agora token response was incomplete');
+      }
+      if (returnedUid !== undefined && Number(returnedUid) !== uid) {
+        throw new Error('Agora token UID does not match the joining UID');
+      }
+
       setCall(activeCall);
+      setAgoraConfig({
+        token,
+        appId,
+        channelName: returnedChannelName,
+        uid: returnedUid === undefined ? uid : Number(returnedUid),
+      });
     } catch (err) {
       console.error('Call start error:', err);
       if (mountedRef.current) {
@@ -220,7 +272,6 @@ const StreamCallScreen = ({ route, navigation }) => {
       }
     }
   }, [
-    callUi,
     groupId,
     groupMemberIds,
     groupName,
@@ -232,7 +283,7 @@ const StreamCallScreen = ({ route, navigation }) => {
     reconnect,
     t,
     user,
-    video,
+    videoCall,
   ]);
 
   useEffect(() => {
@@ -240,7 +291,11 @@ const StreamCallScreen = ({ route, navigation }) => {
     startCall();
 
     const connectTimeout = setTimeout(() => {
-      if (mountedRef.current && starting) {
+      if (
+        mountedRef.current &&
+        !callConnectedRef.current &&
+        !activeCallRef.current
+      ) {
         setError(t('stream.callFailed'));
         setStarting(false);
       }
@@ -249,7 +304,10 @@ const StreamCallScreen = ({ route, navigation }) => {
     return () => {
       mountedRef.current = false;
       clearTimeout(connectTimeout);
+      stopRingbackTone();
+      stopIncomingRingtone();
       if (!hungUpRef.current) {
+        leaveAgoraChannel().catch(() => {});
         endActiveCall(activeCallRef.current, {
           isIncoming,
           wasConnected: callConnectedRef.current,
@@ -259,18 +317,6 @@ const StreamCallScreen = ({ route, navigation }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  if (!isStreamVideoAvailable() || !callUi) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.title}>{t('stream.callsUnavailableTitle')}</Text>
-        <Text style={styles.message}>{t('stream.callsUnavailableMessage')}</Text>
-        <TouchableOpacity style={styles.btn} onPress={handleHangup}>
-          <Text style={styles.btnText}>{t('common.back')}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   if (error) {
     return (
@@ -296,8 +342,8 @@ const StreamCallScreen = ({ route, navigation }) => {
               ? t('groups.incomingGroupCall')
               : t('stream.incomingCall')
             : isGroupCall
-              ? t('groups.startingGroupCall')
-              : t('stream.callConnecting')}
+            ? t('groups.startingGroupCall')
+            : t('stream.callConnecting')}
         </Text>
       </View>
     );
@@ -310,12 +356,14 @@ const StreamCallScreen = ({ route, navigation }) => {
   return (
     <StreamActiveCall
       call={call}
-      video={video}
+      video={videoCall}
       isGroupCall={isGroupCall}
       callerName={displayName}
       callerAvatar={otherUserAvatar}
       onHangup={handleHangup}
       onCallJoined={handleCallJoined}
+      agoraConfig={agoraConfig}
+      isIncoming={isIncoming}
     />
   );
 };
@@ -335,7 +383,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
-  message: { color: '#ccc', textAlign: 'center', marginBottom: 20, lineHeight: 22 },
+  message: {
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
   btn: {
     backgroundColor: '#D4AF37',
     paddingHorizontal: 24,

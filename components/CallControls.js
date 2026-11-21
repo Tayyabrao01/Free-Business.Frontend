@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useCall, useCallStateHooks } from '@stream-io/video-react-bindings';
-import { setCallSpeakerphone, isSpeakerForcedOn } from '../utils/callAudio';
+import { isSpeakerForcedOn } from '../utils/callAudio';
+import {
+  setAgoraCameraEnabled,
+  setAgoraMicrophoneEnabled,
+  setAgoraSpeakerEnabled,
+  switchAgoraCamera,
+} from '../services/agoraCallService';
 
-const formatDuration = (totalSeconds) => {
+const formatDuration = totalSeconds => {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
@@ -18,13 +23,18 @@ const CallControls = ({
   onHangup,
   showTimer = true,
   connectedAt = null,
+  micMuted = false,
+  cameraMuted = false,
+  speakerOn: speakerEnabled,
+  onToggleMute,
+  onToggleCamera,
+  onSwitchCamera,
+  onToggleSpeaker,
 }) => {
-  const call = useCall();
-  const { useMicrophoneState, useCameraState } = useCallStateHooks();
-  const { isMute: micMuted } = useMicrophoneState();
-  const { isMute: camMuted, status: cameraStatus } = useCameraState();
-  const [speakerOn, setSpeakerOn] = useState(
-    () => isSpeakerForcedOn() || Boolean(videoEnabled)
+  const [speakerOn, setSpeakerOn] = useState(() =>
+    speakerEnabled !== undefined
+      ? speakerEnabled
+      : isSpeakerForcedOn() || Boolean(videoEnabled),
   );
   const [elapsed, setElapsed] = useState(0);
 
@@ -41,13 +51,16 @@ const CallControls = ({
     return () => clearInterval(timer);
   }, [connectedAt, showTimer]);
 
+  useEffect(() => {
+    if (speakerEnabled !== undefined) {
+      setSpeakerOn(speakerEnabled);
+    }
+  }, [speakerEnabled]);
+
   const toggleMute = async () => {
     try {
-      if (micMuted) {
-        await call?.microphone?.enable?.();
-      } else {
-        await call?.microphone?.disable?.();
-      }
+      await setAgoraMicrophoneEnabled(micMuted);
+      onToggleMute?.();
     } catch (error) {
       console.warn('toggleMute:', error?.message);
     }
@@ -58,12 +71,8 @@ const CallControls = ({
       return;
     }
     try {
-      const off = camMuted || cameraStatus === 'disabled';
-      if (off) {
-        await call?.camera?.enable?.();
-      } else {
-        await call?.camera?.disable?.();
-      }
+      await setAgoraCameraEnabled(cameraMuted);
+      onToggleCamera?.();
     } catch (error) {
       console.warn('toggleCamera:', error?.message);
     }
@@ -72,10 +81,23 @@ const CallControls = ({
   const toggleSpeaker = async () => {
     const next = !speakerOn;
     setSpeakerOn(next);
-    await setCallSpeakerphone(call, next);
+    await setAgoraSpeakerEnabled(next);
+    onToggleSpeaker?.(next);
   };
 
-  const cameraOff = camMuted || cameraStatus === 'disabled';
+  const switchCamera = async () => {
+    if (!videoEnabled || cameraMuted) {
+      return;
+    }
+    try {
+      await switchAgoraCamera();
+      onSwitchCamera?.();
+    } catch (error) {
+      console.warn('switchCamera:', error?.message);
+    }
+  };
+
+  const cameraOff = cameraMuted;
 
   return (
     <View style={styles.wrap}>
@@ -97,6 +119,15 @@ const CallControls = ({
             icon={cameraOff ? 'videocam-off' : 'videocam'}
             label={cameraOff ? 'Camera' : 'Camera'}
             onPress={toggleCamera}
+          />
+        ) : null}
+
+        {videoEnabled ? (
+          <ControlButton
+            active
+            icon="camera-reverse"
+            label="Switch"
+            onPress={switchCamera}
           />
         ) : null}
 
@@ -137,12 +168,7 @@ const ControlButton = ({
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <Ionicons
-        name={icon}
-        size={26}
-        color="#fff"
-        style={iconStyle}
-      />
+      <Ionicons name={icon} size={26} color="#fff" style={iconStyle} />
     </TouchableOpacity>
     <Text style={styles.label}>{label}</Text>
   </View>

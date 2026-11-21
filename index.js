@@ -1,16 +1,31 @@
 /**
  * @format
- * URL polyfill MUST load before any other imports (Stream, axios, Sentry use URLSearchParams.set).
+ * URL polyfill MUST load before any other imports.
  */
 import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import { AppRegistry } from 'react-native';
+import messaging from '@react-native-firebase/messaging';
+import { displayRemotePushNotification } from './services/pushNotifications';
+import App from './App';
+import { name as appName } from './app.json';
 
+// ✅ 1. REGISTER BACKGROUND MESSAGE HANDLER AT TOP LEVEL (For Messages & Calls)
 try {
-  const { registerPushBackgroundHandler } = require('./services/pushNotifications');
-  registerPushBackgroundHandler();
+  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+    console.log('📩 Background message received:', remoteMessage);
+    await displayRemotePushNotification(remoteMessage);
+  });
 } catch (error) {
-  console.warn('Push background handler skipped:', error?.message);
+  console.warn('Background message handler registration failed:', error?.message);
+}
+
+// ✅ 2. Stream Video & Agora Setup (Your existing code)
+try {
+  const { registerAgoraForegroundService } = require('./services/agoraForegroundService');
+  registerAgoraForegroundService();
+} catch (error) {
+  console.warn('Agora foreground service skipped:', error?.message);
 }
 
 try {
@@ -43,7 +58,5 @@ try {
   // Stream Video SDK not linked in this build
 }
 
-import App from './App';
-import { name as appName } from './app.json';
-
+// ✅ 3. Register App
 AppRegistry.registerComponent(appName, () => App);

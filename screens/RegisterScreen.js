@@ -13,12 +13,20 @@ import {
   Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
+import Svg, {
+  Defs,
+  LinearGradient as SvgGradient,
+  Stop,
+  Rect,
+} from 'react-native-svg';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../hooks/useTranslation';
 import LanguageToggle from '../components/LanguageToggle';
 import PakistanPhoneInput from '../components/PakistanPhoneInput';
-import { normalizePhone } from '../services/phoneOtpService';
+import {
+  getCountryPhoneNumber,
+  isValidCountryPhone,
+} from '../components/PakistanPhoneInput';
 import { REFERRAL_ENABLED } from '../config/features';
 import { markHasRegistered } from '../services/OnboardingService';
 
@@ -27,6 +35,8 @@ const RegisterScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState(null);
+  const [whatsappCountry, setWhatsappCountry] = useState(null);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -41,8 +51,14 @@ const RegisterScreen = ({ navigation }) => {
     name: name.trim(),
     email: email.trim().toLowerCase(),
     password,
-    phone: normalizePhone(phone) || '',
-    whatsappNumber: normalizePhone(whatsappNumber || phone) || '',
+    phone: getCountryPhoneNumber(phone, phoneCountry?.cca2 || 'PK') || '',
+    whatsappNumber:
+      getCountryPhoneNumber(
+        whatsappNumber || phone,
+        whatsappNumber
+          ? whatsappCountry?.cca2 || 'PK'
+          : phoneCountry?.cca2 || 'PK',
+      ) || '',
     location: location.trim() || 'Not specified',
     referralCode,
   });
@@ -54,6 +70,23 @@ const RegisterScreen = ({ navigation }) => {
     }
     if (password.length < 6) {
       Alert.alert(t('common.error'), t('register.passwordMinLength'));
+      return false;
+    }
+    if (phone && !isValidCountryPhone(phone, phoneCountry?.cca2 || 'PK')) {
+      Alert.alert(
+        t('common.error'),
+        'Enter a valid phone number for the selected country.',
+      );
+      return false;
+    }
+    if (
+      whatsappNumber &&
+      !isValidCountryPhone(whatsappNumber, whatsappCountry?.cca2 || 'PK')
+    ) {
+      Alert.alert(
+        t('common.error'),
+        'Enter a valid Free Business number for the selected country.',
+      );
       return false;
     }
     return true;
@@ -87,7 +120,10 @@ const RegisterScreen = ({ navigation }) => {
     }
 
     setLoading(true);
-    const result = await verifyRegisterOtp(email.trim().toLowerCase(), otpCode.trim());
+    const result = await verifyRegisterOtp(
+      email.trim().toLowerCase(),
+      otpCode.trim(),
+    );
     setLoading(false);
 
     if (result.success) {
@@ -99,7 +135,11 @@ const RegisterScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" translucent />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#0A0A0E"
+        translucent
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -123,7 +163,13 @@ const RegisterScreen = ({ navigation }) => {
                 <Stop offset="100%" stopColor="#0A0A0E" stopOpacity="1" />
               </SvgGradient>
             </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#registerFade)" />
+            <Rect
+              x="0"
+              y="0"
+              width="100%"
+              height="100%"
+              fill="url(#registerFade)"
+            />
           </Svg>
 
           {/* Top Bar with Language Toggle */}
@@ -169,17 +215,29 @@ const RegisterScreen = ({ navigation }) => {
           </View>
 
           <View style={styles.infoNotice}>
-            <Ionicons name="information-circle-outline" size={16} color="#D4AF37" />
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color="#D4AF37"
+            />
             <Text style={styles.infoNoticeText}>
-              {t('register.emailOtpHint') || 'Email verification OTP is required to activate your verified account.'}
+              {t('register.emailOtpHint') ||
+                'Email verification OTP is required to activate your verified account.'}
             </Text>
           </View>
 
           {/* FULL NAME */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('register.fullName').toUpperCase()} *</Text>
+            <Text style={styles.inputLabel}>
+              {t('register.fullName').toUpperCase()} *
+            </Text>
             <View style={styles.inputBox}>
-              <Ionicons name="person-outline" size={18} color="#D4AF37" style={styles.inputIcon} />
+              <Ionicons
+                name="person-outline"
+                size={18}
+                color="#D4AF37"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.textInput}
                 placeholder={t('register.fullName')}
@@ -192,9 +250,16 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* EMAIL */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('register.email').toUpperCase()} *</Text>
+            <Text style={styles.inputLabel}>
+              {t('register.email').toUpperCase()} *
+            </Text>
             <View style={styles.inputBox}>
-              <Ionicons name="mail-outline" size={18} color="#D4AF37" style={styles.inputIcon} />
+              <Ionicons
+                name="mail-outline"
+                size={18}
+                color="#D4AF37"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.textInput}
                 placeholder={t('register.email')}
@@ -210,9 +275,16 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* PASSWORD */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('login.password').toUpperCase()} * (MIN. 6 CHARS)</Text>
+            <Text style={styles.inputLabel}>
+              {t('login.password').toUpperCase()} * (MIN. 6 CHARS)
+            </Text>
             <View style={styles.inputBox}>
-              <Ionicons name="lock-closed-outline" size={18} color="#D4AF37" style={styles.inputIcon} />
+              <Ionicons
+                name="lock-closed-outline"
+                size={18}
+                color="#D4AF37"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.textInput}
                 placeholder={t('register.passwordHint')}
@@ -225,7 +297,7 @@ const RegisterScreen = ({ navigation }) => {
               />
               <TouchableOpacity
                 style={styles.eyeBtn}
-                onPress={() => setShowPassword((v) => !v)}
+                onPress={() => setShowPassword(v => !v)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons
@@ -239,10 +311,14 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* MOBILE NUMBER */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('register.phoneOptional').toUpperCase()}</Text>
+            <Text style={styles.inputLabel}>
+              {t('register.phoneOptional').toUpperCase()}
+            </Text>
             <PakistanPhoneInput
               value={phone}
               onChangeValue={setPhone}
+              country={phoneCountry}
+              onChangeCountry={setPhoneCountry}
               placeholder={t('login.phoneLocalPlaceholder') || '3001234567'}
               style={styles.phoneInputRow}
             />
@@ -250,10 +326,14 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* FREE BUSINESS NUMBER / WHATSAPP */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('register.freeBusinessNumberOptional').toUpperCase()}</Text>
+            <Text style={styles.inputLabel}>
+              {t('register.freeBusinessNumberOptional').toUpperCase()}
+            </Text>
             <PakistanPhoneInput
               value={whatsappNumber}
               onChangeValue={setWhatsappNumber}
+              country={whatsappCountry}
+              onChangeCountry={setWhatsappCountry}
               placeholder={t('login.phoneLocalPlaceholder') || '3001234567'}
               style={styles.phoneInputRow}
             />
@@ -261,9 +341,16 @@ const RegisterScreen = ({ navigation }) => {
 
           {/* CITY / LOCATION */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t('register.location').toUpperCase()}</Text>
+            <Text style={styles.inputLabel}>
+              {t('register.location').toUpperCase()}
+            </Text>
             <View style={styles.inputBox}>
-              <Ionicons name="location-outline" size={18} color="#D4AF37" style={styles.inputIcon} />
+              <Ionicons
+                name="location-outline"
+                size={18}
+                color="#D4AF37"
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.textInput}
                 placeholder={t('register.location')}
@@ -277,9 +364,16 @@ const RegisterScreen = ({ navigation }) => {
           {/* REFERRAL CODE (IF ENABLED) */}
           {REFERRAL_ENABLED ? (
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('rewards.referralCodeOptional').toUpperCase()}</Text>
+              <Text style={styles.inputLabel}>
+                {t('rewards.referralCodeOptional').toUpperCase()}
+              </Text>
               <View style={styles.inputBox}>
-                <Ionicons name="gift-outline" size={18} color="#D4AF37" style={styles.inputIcon} />
+                <Ionicons
+                  name="gift-outline"
+                  size={18}
+                  color="#D4AF37"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.textInput}
                   placeholder={t('rewards.referralCodeOptional')}
@@ -300,7 +394,10 @@ const RegisterScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading && !otpSent ? (
-              <ActivityIndicator color={otpSent ? '#D4AF37' : '#0A0A0E'} size="small" />
+              <ActivityIndicator
+                color={otpSent ? '#D4AF37' : '#0A0A0E'}
+                size="small"
+              />
             ) : (
               <>
                 <Ionicons
@@ -308,8 +405,15 @@ const RegisterScreen = ({ navigation }) => {
                   size={16}
                   color={otpSent ? '#D4AF37' : '#0A0A0E'}
                 />
-                <Text style={[styles.sendOtpButtonText, otpSent && styles.resendOtpButtonText]}>
-                  {otpSent ? t('register.resendEmailOtp') : t('register.sendEmailOtp')}
+                <Text
+                  style={[
+                    styles.sendOtpButtonText,
+                    otpSent && styles.resendOtpButtonText,
+                  ]}
+                >
+                  {otpSent
+                    ? t('register.resendEmailOtp')
+                    : t('register.sendEmailOtp')}
                 </Text>
               </>
             )}
@@ -320,11 +424,18 @@ const RegisterScreen = ({ navigation }) => {
             <View style={styles.otpCardSection}>
               <View style={styles.otpHeader}>
                 <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-                <Text style={styles.otpHeaderTitle}>ENTER 6-DIGIT VERIFICATION CODE</Text>
+                <Text style={styles.otpHeaderTitle}>
+                  ENTER 6-DIGIT VERIFICATION CODE
+                </Text>
               </View>
 
               <View style={styles.inputBox}>
-                <Ionicons name="keypad-outline" size={18} color="#10B981" style={styles.inputIcon} />
+                <Ionicons
+                  name="keypad-outline"
+                  size={18}
+                  color="#10B981"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={[styles.textInput, styles.otpTextInput]}
                   placeholder={t('register.emailOtpCode')}
@@ -346,7 +457,11 @@ const RegisterScreen = ({ navigation }) => {
                   <ActivityIndicator color="#0A0A0E" size="small" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-circle" size={18} color="#0A0A0E" />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color="#0A0A0E"
+                    />
                     <Text style={styles.verifyButtonText}>
                       {t('register.verifyAndRegister')}
                     </Text>
@@ -359,7 +474,9 @@ const RegisterScreen = ({ navigation }) => {
 
         {/* SWITCH TO LOGIN CARD */}
         <View style={styles.loginPromptCard}>
-          <Text style={styles.loginPromptText}>Already have a registered account?</Text>
+          <Text style={styles.loginPromptText}>
+            Already have a registered account?
+          </Text>
           <TouchableOpacity
             style={styles.loginButton}
             activeOpacity={0.8}
@@ -375,8 +492,14 @@ const RegisterScreen = ({ navigation }) => {
         {/* TRUST BADGE FOOTER */}
         <View style={styles.trustFooter}>
           <View style={styles.trustRow}>
-            <Ionicons name="shield-checkmark-outline" size={13} color="#6B6B7F" />
-            <Text style={styles.trustText}>Official Free Business IK App • Verified Investor Network</Text>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={13}
+              color="#6B6B7F"
+            />
+            <Text style={styles.trustText}>
+              Official Free Business IK App • Verified Investor Network
+            </Text>
           </View>
         </View>
       </ScrollView>

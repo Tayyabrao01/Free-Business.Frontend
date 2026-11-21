@@ -7,6 +7,9 @@ export const fetchStreamChatToken = (_userId, userName) =>
 export const fetchStreamVideoToken = (_userId, userName) =>
   api.post('/video/token', { userName });
 
+export const fetchAgoraToken = (channelName, uid) =>
+  api.post('/agora/token', { channelName, uid });
+
 export const syncStreamUser = (userId, userName) =>
   api.post('/stream/sync-user', { userId: userId?.toString(), userName });
 
@@ -25,8 +28,8 @@ export const ensureChannelJoin = (channelId, channelType, otherUserId) =>
   });
 
 /** Single call: server prepares channel + returns channelId to open in the app. */
-export const openChatSession = (payload) =>
+export const openChatSession = payload =>
   api.post('/stream/chat/open', payload, { timeout: 45000 });
 
-export const rebuildChatSession = (payload) =>
+export const rebuildChatSession = payload =>
   openChatSession({ ...payload, forceRebuild: true });

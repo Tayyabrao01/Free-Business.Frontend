@@ -9,6 +9,7 @@ import {
   RefreshControl,
   FlatList,
   StatusBar,
+  Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -18,6 +19,7 @@ import ProgressBar from '../components/ProgressBar';
 import { getMyProgress, claimReward, getLeaderboard } from '../services/rewardsApi';
 import { getApiErrorMessage } from '../utils/apiError';
 import { REFERRAL_ENABLED, COMMISSION_ENABLED } from '../config/features';
+import { CAR_REWARDS } from '../constants/carRewards';
 
 const TIER_COLORS = {
   bronze: '#CD7F32',
@@ -99,6 +101,40 @@ const RewardsScreen = ({ navigation }) => {
         </Text>
       </View>
       <Ionicons name="medal-outline" size={18} color="#D4AF37" />
+    </View>
+  );
+
+  const renderCarReward = (car) => (
+    <View key={car.id} style={styles.tierCard}>
+      <View style={styles.carRewardHeader}>
+        <Image source={car.image} style={styles.carImage} resizeMode="contain" />
+        <View style={styles.tierHeaderText}>
+          <Text style={styles.tierName}>{t(car.nameKey)}</Text>
+          <Text style={styles.tierPrize}>{t('rewards.carRewardLabel')}</Text>
+        </View>
+      </View>
+
+      <View style={styles.carOptions}>
+        {car.options.map((option, index) => (
+          <React.Fragment key={option.plotSizeKey}>
+            {index > 0 ? (
+              <View style={styles.carOrDivider}>
+                <View style={styles.carDividerLine} />
+                <Text style={styles.carOrText}>{t('rewards.or')}</Text>
+                <View style={styles.carDividerLine} />
+              </View>
+            ) : null}
+            <View style={styles.carOptionRow}>
+              <View style={styles.carOptionIcon}>
+                <Ionicons name="home-outline" size={16} color="#D4AF37" />
+              </View>
+              <Text style={styles.carOptionText}>
+                {option.count.toLocaleString()} {t(option.plotSizeKey)}
+              </Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 
@@ -246,6 +282,10 @@ const RewardsScreen = ({ navigation }) => {
           </View>
         );
       })}
+
+      <Text style={styles.sectionHeading}>{t('rewards.carRewardsTitle')}</Text>
+      <Text style={styles.carRewardsSubtitle}>{t('rewards.carRewardsSubtitle')}</Text>
+      {CAR_REWARDS.map(renderCarReward)}
 
       <View style={styles.leaderboardSectionHeader}>
         <Ionicons name="podium-outline" size={18} color="#D4AF37" />
@@ -522,6 +562,66 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
     marginTop: 18,
     marginBottom: 10,
+  },
+  carRewardsSubtitle: {
+    color: '#8A8A96',
+    fontSize: 12,
+    lineHeight: 17,
+    marginHorizontal: 18,
+    marginTop: -4,
+    marginBottom: 10,
+  },
+  carRewardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  carImage: {
+    width: 92,
+    height: 62,
+    borderRadius: 12,
+    backgroundColor: '#1A1A24',
+  },
+  carOptions: {
+    backgroundColor: '#101016',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  carOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 38,
+  },
+  carOptionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  carOptionText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  carOrDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  carDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#262634',
+  },
+  carOrText: {
+    color: '#D4AF37',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 
   /* Tier Cards */

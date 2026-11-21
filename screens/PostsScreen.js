@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   StatusBar,
   Share,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import api, { isAbortError } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +23,7 @@ import { resolveMediaUrl } from '../utils/imageUrl';
 import { getApiErrorMessage } from '../utils/apiError';
 import { downloadMedia, detectMediaType } from '../services/MediaService';
 import MediaViewerModal from '../components/MediaViewerModal';
+import PostMedia from '../components/PostMedia';
 
 const formatRelativeTime = (dateString) => {
   if (!dateString) return '';
@@ -112,6 +113,7 @@ const ExpandableComment = ({ text, maxLength = 95 }) => {
 const PostsScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { t } = useTranslation();
+  const isFocused = useIsFocused();
 
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -123,6 +125,20 @@ const PostsScreen = ({ navigation }) => {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [downloadingPostId, setDownloadingPostId] = useState(null);
   const [viewerUri, setViewerUri] = useState(null);
+  const [visiblePostId, setVisiblePostId] = useState(null);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [expandedReplies, setExpandedReplies] = useState({});
+
+  // ✅ FIX: Move these out of the render cycle using useRef to prevent the crash
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    setVisiblePostId(viewableItems[0]?.item?._id || null);
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
 
   const fetchPosts = useCallback(async (signal, showLoader = true) => {
     if (showLoader) {
@@ -146,9 +162,9 @@ const PostsScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const controller = new AbortController();
-      fetchPosts(controller.signal, posts.length === 0);
+      fetchPosts(controller.signal, false);
       return () => controller.abort();
-    }, [fetchPosts, posts.length])
+    }, [fetchPosts])
   );
 
   const onRefresh = () => {
@@ -200,9 +216,13 @@ const PostsScreen = ({ navigation }) => {
 
     setSubmittingComment(true);
     try {
-      const response = await api.post(`/posts/${postId}/comment`, { text: commentText.trim() });
+      const response = await api.post(`/posts/${postId}/comment`, {
+        text: commentText.trim(),
+        parentCommentId: replyingTo?._id || undefined,
+      });
       updatePostInState(postId, { comments: response.data.comments });
       setCommentText('');
+      setReplyingTo(null);
     } catch (error) {
       Alert.alert(t('common.error'), t('posts.commentFailed'));
     } finally {
@@ -228,7 +248,11 @@ const PostsScreen = ({ navigation }) => {
   };
 
   const handleDownloadMedia = async (post) => {
-    const mediaUrl = resolveMediaUrl(post.imageUrl);
+    const postMedia = post.media?.[0] || (post.imageUrl ? {
+      url: post.imageUrl,
+      type: detectMediaType(post.imageUrl),
+    } : null);
+    const mediaUrl = postMedia ? resolveMediaUrl(postMedia.url) : null;
     if (!mediaUrl) {
       Alert.alert(t('common.error'), t('posts.noMedia'));
       return;
@@ -236,7 +260,7 @@ const PostsScreen = ({ navigation }) => {
 
     setDownloadingPostId(post._id);
     try {
-      await downloadMedia(mediaUrl, detectMediaType(mediaUrl), {
+      await downloadMedia(mediaUrl, postMedia.type, {
         successTitle: t('common.success'),
         successMessage: t('posts.downloadSuccess'),
         errorTitle: t('common.error'),
@@ -256,6 +280,7 @@ const PostsScreen = ({ navigation }) => {
     } else {
       setActiveCommentPostId(postId);
       setCommentText('');
+      setReplyingTo(null);
     }
   };
 
@@ -265,14 +290,85 @@ const PostsScreen = ({ navigation }) => {
   };
 
   const confirmDeletePost = (post) => {
-    Alert.alert(t('posts.deletePostTitle'), t('posts.deletePostConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
+    Alert.alert('Post options', undefined, [
+      {
+        text: 'Edit',
+        onPress: () => navigation.navigate('AddPost', { post }),
+      },
       {
         text: t('posts.deletePost'),
         style: 'destructive',
-        onPress: () => handleDeletePost(post._id),
+        onPress: () => {
+          Alert.alert(t('posts.deletePostTitle'), t('posts.deletePostConfirm'), [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('posts.deletePost'),
+              style: 'destructive',
+              onPress: () => handleDeletePost(post._id),
+            },
+          ]);
+        },
       },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
+  };
+
+  const showCommentOptions = (postId, comment) => {
+    Alert.alert('Comment options', undefined, [
+      {
+        text: 'Edit',
+        onPress: () => {
+          setEditingCommentId(comment._id);
+          setEditingCommentText(comment.text || '');
+        },
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert('Delete comment', 'Are you sure you want to delete this comment?', [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  const response = await api.delete(`/comments/${comment._id}`);
+                  updatePostInState(postId, { comments: response.data.comments });
+                } catch (error) {
+                  Alert.alert(t('common.error'), getApiErrorMessage(error, 'Could not delete comment'));
+                }
+              },
+            },
+          ]);
+        },
+      },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  };
+
+  const saveCommentEdit = async (postId, commentId) => {
+    if (!editingCommentText.trim()) {
+      Alert.alert(t('common.error'), 'Comment text is required');
+      return;
+    }
+
+    try {
+      const response = await api.put(`/comments/${commentId}`, {
+        text: editingCommentText.trim(),
+      });
+      updatePostInState(postId, { comments: response.data.comments });
+      setEditingCommentId(null);
+      setEditingCommentText('');
+    } catch (error) {
+      Alert.alert(t('common.error'), getApiErrorMessage(error, 'Could not edit comment'));
+    }
+  };
+
+  const startReply = (postId, comment) => {
+    setActiveCommentPostId(postId);
+    setReplyingTo(comment);
+    setCommentText('');
   };
 
   const handleDeletePost = async (postId) => {
@@ -292,14 +388,87 @@ const PostsScreen = ({ navigation }) => {
     const isLiked = likes.some(
       (id) => id === user?._id || id?._id === user?._id || String(id) === String(user?._id)
     );
-    const mediaUrl = resolveMediaUrl(item.imageUrl);
-    const mediaType = mediaUrl ? detectMediaType(mediaUrl) : null;
+    const media = item.media?.[0] || (item.imageUrl ? {
+      url: item.imageUrl,
+      type: detectMediaType(item.imageUrl),
+      thumbnailUrl: null,
+    } : null);
+    const mediaUrl = media ? resolveMediaUrl(media.url) : null;
+    const mediaType = media?.type || null;
     const isDownloading = downloadingPostId === item._id;
     const timeAgo = formatRelativeTime(item.createdAt);
 
     const authorId = item.author?._id || item.author;
     const authorName = item.author?.name || t('common.user');
     const authorAvatar = item.author?.avatar || item.author?.profileImage;
+
+    const renderComment = (comment, isReply = false) => (
+      <View
+        key={comment._id}
+        style={[styles.commentItem, isReply && styles.commentReplyItem]}
+      >
+        <View style={styles.commentAvatarMini}>
+          <Text style={styles.commentInitial}>
+            {(comment.user?.name || 'U').charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.commentBubble}>
+          <Text style={styles.commentAuthor} numberOfLines={1}>
+            {comment.user?.name || t('common.user')}
+          </Text>
+          {editingCommentId === comment._id ? (
+            <>
+              <TextInput
+                style={styles.commentEditInput}
+                value={editingCommentText}
+                onChangeText={setEditingCommentText}
+                multiline
+              />
+              <View style={styles.commentEditActions}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditingCommentId(null);
+                    setEditingCommentText('');
+                  }}
+                >
+                  <Text style={styles.commentEditCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => saveCommentEdit(item._id, comment._id)}
+                >
+                  <Text style={styles.commentEditSave}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <ExpandableComment text={comment.text} maxLength={95} />
+              {comment.isEdited ? (
+                <Text style={styles.editedLabel}>edited</Text>
+              ) : null}
+              {!isReply ? (
+                <TouchableOpacity
+                  onPress={() => startReply(item._id, comment)}
+                  style={styles.replyButton}
+                >
+                  <Text style={styles.replyButtonText}>Reply</Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
+          )}
+        </View>
+        {comment.user?._id &&
+        String(comment.user._id) === String(user?._id) &&
+        editingCommentId !== comment._id ? (
+          <TouchableOpacity
+            onPress={() => showCommentOptions(item._id, comment)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={17} color="#8A8A96" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
 
     return (
       <View style={styles.postCard}>
@@ -328,7 +497,10 @@ const PostsScreen = ({ navigation }) => {
                   style={styles.verifiedIcon}
                 />
               </View>
-              <Text style={styles.postDate}>{timeAgo || 'Recently'}</Text>
+              <Text style={styles.postDate}>
+                {timeAgo || 'Recently'}{' '}
+                {item.isEdited ? <Text style={styles.editedLabel}>edited</Text> : null}
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -338,7 +510,7 @@ const PostsScreen = ({ navigation }) => {
               style={styles.deleteButton}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
+              <Ionicons name="ellipsis-horizontal" size={19} color="#8A8A96" />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -352,20 +524,28 @@ const PostsScreen = ({ navigation }) => {
             <TouchableOpacity
               activeOpacity={0.92}
               onPress={() => setViewerUri(mediaUrl)}
+              disabled={mediaType === 'video'}
             >
-              {mediaType === 'video' ? (
-                <View style={styles.videoPlaceholder}>
-                  <Ionicons name="play-circle" size={54} color="#D4AF37" />
-                  <Text style={styles.videoPlaceholderText}>{t('posts.tapToView')}</Text>
-                </View>
-              ) : (
+              {mediaType === 'image' ? (
                 <View style={styles.imageWrapper}>
-                  <Image source={{ uri: mediaUrl }} style={styles.postImage} />
+                  <PostMedia
+                    media={media}
+                    style={styles.postImage}
+                    isVisible={isFocused && visiblePostId === item._id}
+                    onPress={() => setViewerUri(mediaUrl)}
+                  />
                   <View style={styles.expandBadge}>
                     <Ionicons name="scan-outline" size={13} color="#FFFFFF" />
                     <Text style={styles.expandBadgeText}>Tap to zoom</Text>
                   </View>
                 </View>
+              ) : (
+                <PostMedia
+                  media={media}
+                  style={styles.postImage}
+                  isVisible={isFocused && visiblePostId === item._id}
+                  onPress={() => setViewerUri(mediaUrl)}
+                />
               )}
             </TouchableOpacity>
 
@@ -439,20 +619,31 @@ const PostsScreen = ({ navigation }) => {
         {activeCommentPostId === item._id && (
           <View style={styles.commentSection}>
             {item.comments && item.comments.length > 0 ? (
-              item.comments.map((comment, index) => (
-                <View key={index} style={styles.commentItem}>
-                  <View style={styles.commentAvatarMini}>
-                    <Text style={styles.commentInitial}>
-                      {(comment.user?.name || 'U').charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.commentBubble}>
-                    <Text style={styles.commentAuthor} numberOfLines={1}>
-                      {comment.user?.name || t('common.user')}
-                    </Text>
-                    <ExpandableComment text={comment.text} maxLength={95} />
-                  </View>
-                </View>
+              item.comments.map(comment => (
+                <React.Fragment key={comment._id}>
+                  {renderComment(comment)}
+                  {comment.replies?.length > 2 ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        setExpandedReplies(previous => ({
+                          ...previous,
+                          [comment._id]: !previous[comment._id],
+                        }))
+                      }
+                      style={styles.viewRepliesButton}
+                    >
+                      <Text style={styles.replyButtonText}>
+                        {expandedReplies[comment._id]
+                          ? 'Hide replies'
+                          : `View ${comment.replies.length} replies`}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {(expandedReplies[comment._id] || comment.replies?.length <= 2
+                    ? comment.replies || []
+                    : []
+                  ).map(reply => renderComment(reply, true))}
+                </React.Fragment>
               ))
             ) : (
               <Text style={styles.noCommentsText}>
@@ -460,6 +651,21 @@ const PostsScreen = ({ navigation }) => {
               </Text>
             )}
 
+            {replyingTo ? (
+              <View style={styles.replyingBanner}>
+                <Text style={styles.replyingText}>
+                  Replying to {replyingTo.user?.name || t('common.user')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setReplyingTo(null);
+                    setCommentText('');
+                  }}
+                >
+                  <Text style={styles.commentEditCancel}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <View style={styles.commentInputRow}>
               <TextInput
                 style={styles.commentInput}
@@ -583,6 +789,9 @@ const PostsScreen = ({ navigation }) => {
           contentContainerStyle={styles.list}
           ListHeaderComponent={listHeader}
           showsVerticalScrollIndicator={false}
+          // ✅ FIXED: Using useRef values here prevents the crash
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -952,6 +1161,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 10,
   },
+  commentReplyItem: {
+    marginLeft: 36,
+  },
   commentAvatarMini: {
     width: 28,
     height: 28,
@@ -986,6 +1198,61 @@ const styles = StyleSheet.create({
     color: '#D8D8E0',
     fontSize: 13,
     lineHeight: 18,
+  },
+  editedLabel: {
+    color: '#7A7A88',
+    fontSize: 10,
+    fontStyle: 'italic',
+  },
+  commentEditInput: {
+    color: '#D8D8E0',
+    fontSize: 13,
+    lineHeight: 18,
+    minHeight: 36,
+    borderWidth: 1,
+    borderColor: '#262632',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  commentEditActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 6,
+  },
+  commentEditCancel: {
+    color: '#8A8A96',
+    fontSize: 11,
+    marginRight: 12,
+  },
+  commentEditSave: {
+    color: '#D4AF37',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  replyButton: {
+    alignSelf: 'flex-start',
+    marginTop: 5,
+  },
+  replyButtonText: {
+    color: '#8A8A96',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  viewRepliesButton: {
+    marginLeft: 36,
+    marginBottom: 8,
+  },
+  replyingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  replyingText: {
+    color: '#8A8A96',
+    fontSize: 11,
   },
   noCommentsText: {
     fontSize: 12,
